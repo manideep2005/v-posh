@@ -3,53 +3,62 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const config = require('../config');
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 
-const uploadDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// ---------------------------------------------------------------------------
+// Evidence upload. Two storage backends:
+//   - MongoDB GridFS (default when MONGODB_URI is set) — works on serverless
+//     hosts where the filesystem is ephemeral (Vercel, Lambda, etc.)
+//   - Local disk (server/uploads) — used when running on the JSON engine
+// ---------------------------------------------------------------------------
+
+const DISK_UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(DISK_UPLOAD_DIR)) {
+  fs.mkdirSync(DISK_UPLOAD_DIR, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, 'evidence-' + uniqueSuffix + ext);
-  }
-});
-
-const fileFilter = (req, file, cb) => {
-  if (config.ALLOWED_FILE_TYPES.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    const err = new Error('Invalid file type. Allowed formats: PNG, JPEG, WebP, PDF, DOC, DOCX.');
-    err.status = 400;
-    cb(err);
-  }
-};
-
+// Memory storage keeps the flow serverless-safe; the buffer is then written
+// either to GridFS or to disk. 10 MB in memory is acceptable.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: config.MAX_FILE_SIZE },
-  fileFilter
+  fileFilter: (req, file, cb) => {
+    if (config.ALLOWED_FILE_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      const err = new Error('Invalid file type. Allowed formats: PNG, JPEG, WebP, PDF, DOC, DOCX.');
+      err.status = 400;
+      cb(err);
+    }
+  }
 });
 
-// Multer errors (too large, bad type) surface as HTML unless caught here.
-router.use((err, req, res, next) => {
-  if (err) {
-    const status = err.status || (err.code === 'LIMIT_FILE_SIZE' ? 413 : 500);
-    const message = err.code === 'LIMIT_FILE_SIZE'
-      ? 'File exceeds the maximum permitted size of 10 MB.'
-      : err.message || 'File upload failed.';
-    return res.status(status).json({ success: false, message });
-  }
-  next();
-});
+async function storeInGridFS(buffer, originalName, mimetype) {
+  const { GridFSBucket } = require('mongodb');
+  const mongoDb = db.getMongoDb();
+  const bucket = new GridFSBucket(mongoDb, { bucketName: 'evidence' });
+  const storedName = `evidence-${Date.now()}-${crypto.randomBytes(8).toString('hex')}${path.extname(originalName)}`;
+
+  return new Promise((resolve, reject) => {
+    const uploadStream = bucket.openUploadStream(storedName, {
+      contentType: mimetype,
+      metadata: { originalName }
+    });
+    uploadStream.on('error', reject);
+    uploadStream.on('finish', () => resolve({ gridFsId: String(uploadStream.id), filename: storedName }));
+    uploadStream.end(buffer);
+  });
+}
+
+function storeOnDisk(buffer, originalName) {
+  const filename = `evidence-${Date.now()}-${crypto.randomBytes(8).toString('hex')}${path.extname(originalName)}`;
+  const filePath = path.join(DISK_UPLOAD_DIR, filename);
+  fs.writeFileSync(filePath, buffer);
+  return { gridFsId: null, filename };
+}
 
 router.post('/', authenticateToken, upload.array('attachments', 5), async (req, res) => {
   try {
@@ -59,8 +68,16 @@ router.post('/', authenticateToken, upload.array('attachments', 5), async (req, 
 
     const savedAttachments = [];
     for (const file of req.files) {
+      let stored;
+      if (db.getEngineName() === 'mongodb' && db.getMongoDb()) {
+        stored = await storeInGridFS(file.buffer, file.originalname, file.mimetype);
+      } else {
+        stored = storeOnDisk(file.buffer, file.originalname);
+      }
+
       const saved = await db.attachments.insertOne({
-        filename: file.filename,
+        filename: stored.filename,
+        gridFsId: stored.gridFsId,
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
@@ -81,6 +98,17 @@ router.post('/', authenticateToken, upload.array('attachments', 5), async (req, 
     console.error('Upload error:', err);
     res.status(500).json({ success: false, message: 'File upload failed.' });
   }
+});
+
+// Error handler registered AFTER the route so Express actually routes
+// multer rejections (bad type, file too large) here instead of the generic
+// 500 handler.
+router.use((err, req, res, next) => {
+  const status = err.status || (err.code === 'LIMIT_FILE_SIZE' ? 413 : 500);
+  const message = err.code === 'LIMIT_FILE_SIZE'
+    ? 'File exceeds the maximum permitted size of 10 MB.'
+    : err.message || 'File upload failed.';
+  return res.status(status).json({ success: false, message });
 });
 
 module.exports = router;

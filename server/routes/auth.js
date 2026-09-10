@@ -196,7 +196,12 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
 
   logAuditAction(req, 'PASSWORD_RESET_REQUESTED', 'USER', user.id, `Password reset requested for ${user.email}`);
 
-  const resetLink = `${config.APP_BASE_URL}/auth/reset-password?token=${token}`;
+  // Prefer explicit APP_BASE_URL; otherwise derive from the request so reset
+  // links stay valid on any deployment domain (Vercel preview URLs, etc.).
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const baseUrl = config.APP_BASE_URL || `${proto}://${host}`;
+  const resetLink = `${baseUrl}/auth/reset-password?token=${token}`;
 
   // No SMTP transport is configured in this build; the reset link is returned
   // to the requester in development. Wire an email service here for production

@@ -69,11 +69,52 @@ status, assignedAdminId, complaintId, createdAt) on first boot.
 | `npm start`      | Serve the API + built client from :5001  |
 | `npm run seed`   | Reset and reseed the database (MongoDB if configured) |
 
+## Deploying to Vercel
+
+The repository is Vercel-ready: the client is served from the CDN and the API
+runs as a serverless function behind the same domain (`/api/*` rewrites to the
+`api/index.js` entry). Evidence files are stored in **MongoDB GridFS**, so no
+persistent disk is required.
+
+1. Push this repo to GitHub (already done) and import it in Vercel
+   (**Add New → Project**). No framework preset needed — `vercel.json`
+   defines install/build/output.
+2. Add environment variables (Project → Settings → Environment Variables):
+
+   | Variable | Value |
+   | -------- | ----- |
+   | `MONGODB_URI` | your Atlas connection string |
+   | `MONGODB_DB_NAME` | `posh_platform` |
+   | `JWT_SECRET` | **a fresh long random string** (never reuse the dev value) |
+   | `JWT_EXPIRES_IN` | `24h` |
+   | `APP_BASE_URL` | your final production URL (e.g. `https://v-posh.vercel.app`) — optional; reset links otherwise derive from the request host |
+   | `CORS_ORIGINS` | only needed if you host the frontend on a *different* domain than the API |
+
+3. Deploy. First boot creates indexes and bootstraps departments/categories.
+4. Seed the demo/institutional accounts **once**, from your machine against
+   the same Atlas database:
+   ```
+   npm run seed
+   ```
+   Then change the seeded passwords immediately via the app or by provisioning
+   real accounts in the Super Admin portal.
+
+Notes:
+
+- MongoDB Atlas connection strings require `mongodb+srv://` support — Vercel's
+  Node runtime supports this out of the box.
+- For a long-running host instead (Render/Railway/VPS), use
+  `npm start` (`node server/index.js`), which serves both the API and the
+  built client from one process.
+
 ## Project structure
 
 ```
+api/
+  index.js            Vercel serverless entry (wraps server/app.js)
 server/
-  index.js            Express app, security headers, CORS, error handling
+  app.js              Express app: middleware, routes, SPA serving, errors
+  index.js            Long-running bootstrap: DB init + app.listen
   config.js           Environment-driven configuration
   db.js               Collection layer over the JSON store
   seed.js             Development data seeder

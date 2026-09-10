@@ -78,7 +78,14 @@ function isPlainObject(v) {
 const jsonState = {};
 
 function jsonEnsureDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (err) {
+    // Read-only filesystem (e.g. serverless) — JSON engine cannot persist there.
+    // Callers get in-memory behavior; MongoDB should be configured in such hosts.
+    return false;
+  }
+  return true;
 }
 
 function jsonLoad() {
@@ -97,10 +104,14 @@ function jsonLoad() {
 }
 
 function jsonSave() {
-  jsonEnsureDir();
-  const tmp = DB_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(jsonState, null, 2), 'utf-8');
-  fs.renameSync(tmp, DB_FILE);
+  if (!jsonEnsureDir()) return;
+  try {
+    const tmp = DB_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(jsonState, null, 2), 'utf-8');
+    fs.renameSync(tmp, DB_FILE);
+  } catch (err) {
+    console.warn('JSON store not writable (in-memory only):', err.message);
+  }
 }
 
 const jsonEngine = {
@@ -379,24 +390,38 @@ async function bootstrapCollections(engine) {
 const dbExports = {
   driver: null,
 
+  // Idempotent + memoized so serverless invocations reuse the connection
+  // pool across warm starts instead of reconnecting on every request.
   async initDb() {
-    if (config.MONGODB_URI) {
-      try {
-        this.driver = await mongoEngine.init();
-      } catch (err) {
-        console.error('MongoDB connection failed, falling back to JSON file store:', err.message);
-        this.driver = await jsonEngine.init();
-      }
-    } else {
-      this.driver = await jsonEngine.init();
+    const G = globalThis;
+    if (G.__poshDbReady) {
+      this.driver = await G.__poshDbReady;
+      return this.driver;
     }
+    G.__poshDbReady = (async () => {
+      if (config.MONGODB_URI) {
+        try {
+          return await mongoEngine.init();
+        } catch (err) {
+          console.error('MongoDB connection failed, falling back to JSON file store:', err.message);
+          return await jsonEngine.init();
+        }
+      }
+      return await jsonEngine.init();
+    })();
+    this.driver = await G.__poshDbReady;
     driver = this.driver;
-    console.log(`Storage engine: ${this.driver === 'mongodb' ? 'MongoDB Atlas' : 'Local JSON file'}`);
     return this.driver;
   },
 
   async closeDb() {
     if (this.driver === 'mongodb') await mongoEngine.close();
+    globalThis.__poshDbReady = null;
+  },
+
+  // Raw handle for GridFS (evidence storage)
+  getMongoDb() {
+    return this.driver === 'mongodb' ? mongoDb : null;
   },
 
   async getSettings() {

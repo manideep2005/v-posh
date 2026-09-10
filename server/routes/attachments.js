@@ -6,7 +6,7 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
+const DISK_UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
 
 // Serve evidence files ONLY after authentication and an access check.
 // Students may fetch attachments of their own complaints; admins and
@@ -36,15 +36,27 @@ router.get('/:id/file', authenticateToken, async (req, res) => {
       return res.status(403).json({ success: false, message: 'You are not authorized to access this attachment.' });
     }
 
-    const filePath = path.join(UPLOAD_DIR, path.basename(attachment.filename));
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ success: false, message: 'Stored file is missing from the server.' });
-    }
-
     res.setHeader('Content-Type', attachment.mimetype || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(attachment.originalname || attachment.filename)}"`);
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    fs.createReadStream(filePath).pipe(res);
+
+    // GridFS path (serverless / MongoDB deployments)
+    if (attachment.gridFsId && db.getEngineName() === 'mongodb' && db.getMongoDb()) {
+      const { GridFSBucket, ObjectId } = require('mongodb');
+      const bucket = new GridFSBucket(db.getMongoDb(), { bucketName: 'evidence' });
+      const downloadStream = bucket.openDownloadStream(new ObjectId(attachment.gridFsId));
+      downloadStream.on('error', () => {
+        if (!res.headersSent) res.status(404).json({ success: false, message: 'Stored file is missing.' });
+      });
+      return downloadStream.pipe(res);
+    }
+
+    // Disk path (JSON engine / long-running hosts)
+    const filePath = path.join(DISK_UPLOAD_DIR, path.basename(attachment.filename));
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Stored file is missing from the server.' });
+    }
+    return fs.createReadStream(filePath).pipe(res);
   } catch (err) {
     console.error('Attachment download error:', err);
     res.status(500).json({ success: false, message: 'Failed to retrieve attachment.' });
