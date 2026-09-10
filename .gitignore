@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Runtime data — contains password hashes, complaint records, evidence files
+server/data/
+server/uploads/
+!server/uploads/.gitkeep
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Build output
+client/dist/
+
+# Logs & OS artifacts
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Tooling metadata
+.freebuff/
