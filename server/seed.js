@@ -24,7 +24,7 @@ async function seed() {
   const superAdmin = await db.users.insertOne({
     email: 'superadmin@vitap.ac.in',
     password: passwordHashSuperAdmin,
-    name: 'Prof. Ananya Roy',
+    name: 'Prof. Mani Deep',
     role: 'super_admin',
     employeeId: 'EMP-SA-001',
     department: 'Humanities & Social Sciences',

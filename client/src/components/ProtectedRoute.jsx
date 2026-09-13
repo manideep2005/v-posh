@@ -17,7 +17,7 @@ export default function ProtectedRoute({ allowedRoles = [], children }) {
 
   // Not logged in -> Redirect to appropriate login page
   if (!user) {
-    if (location.pathname.startsWith('/admin') || location.pathname.startsWith('/super-admin')) {
+    if (location.pathname.startsWith('/admin') || location.pathname.startsWith('/super-admin') || location.pathname.startsWith('/faculty')) {
       return <Navigate to="/admin/login" state={{ from: location }} replace />;
     }
     return <Navigate to="/auth/student/login" state={{ from: location }} replace />;
@@ -40,6 +40,9 @@ export default function ProtectedRoute({ allowedRoles = [], children }) {
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             {user.role === 'student' && (
               <a href="/student/dashboard" className="btn btn-primary btn-sm">Go to Student Dashboard</a>
+            )}
+            {user.role === 'faculty' && (
+              <a href="/faculty/dashboard" className="btn btn-primary btn-sm">Go to Faculty Dashboard</a>
             )}
             {(user.role === 'admin' || user.role === 'super_admin') && (
               <a href="/admin/dashboard" className="btn btn-primary btn-sm">Go to Admin Workspace</a>

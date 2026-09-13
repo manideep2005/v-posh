@@ -62,7 +62,7 @@ export default function NotificationBell() {
     if (!notification.referenceId) return;
 
     // Route to the correct portal based on the signed-in role
-    const base = user && user.role === 'student' ? '/student/complaints' : '/admin/complaints';
+    const base = user && user.role === 'student' ? '/student/complaints' : user && user.role === 'faculty' ? '/faculty/complaints' : '/admin/complaints';
     navigate(`${base}/${notification.referenceId}`);
   };
 

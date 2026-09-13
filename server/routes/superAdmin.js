@@ -217,4 +217,129 @@ router.put('/settings', async (req, res) => {
   }
 });
 
+// ─── Workload Analytics & Officer Performance ───────────────────────────────
+
+router.get('/workload', async (req, res) => {
+  try {
+    const officers = (await db.users.find())
+      .filter(u => u.role === 'admin' || u.role === 'super_admin');
+    const allComplaints = await db.complaints.find();
+    const allHistory = await db.statusHistory.find();
+    const now = new Date();
+
+    // Officer performance metrics
+    const officerMetrics = officers.map(officer => {
+      const assigned = allComplaints.filter(c => c.assignedAdminId === officer.id);
+      const active = assigned.filter(c => c.status !== 'Resolved');
+      const resolved = assigned.filter(c => c.status === 'Resolved');
+      const urgent = assigned.filter(c => c.priority === 'Urgent' && c.status !== 'Resolved');
+
+      // Average resolution time (hours) for resolved cases
+      let avgResolutionHours = null;
+      if (resolved.length > 0) {
+        const resolutionTimes = resolved.map(c => {
+          const created = new Date(c.createdAt);
+          const resolvedEntry = allHistory.find(
+            h => h.complaintId === c.id && h.newStatus === 'Resolved'
+          );
+          const resolvedAt = resolvedEntry ? new Date(resolvedEntry.createdAt) : now;
+          return (resolvedAt - created) / (1000 * 60 * 60);
+        });
+        avgResolutionHours = Math.round(resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length);
+      }
+
+      // SLA breaches (>7 days for unresolved)
+      const slaBreaches = active.filter(c => {
+        const created = new Date(c.createdAt);
+        return (now - created) > (7 * 24 * 60 * 60 * 1000);
+      }).length;
+
+      // Cases received per status
+      const statusBreakdown = {};
+      assigned.forEach(c => {
+        statusBreakdown[c.status] = (statusBreakdown[c.status] || 0) + 1;
+      });
+
+      return {
+        id: officer.id,
+        name: officer.name,
+        email: officer.email,
+        role: officer.role,
+        department: officer.department || 'N/A',
+        designation: officer.designation || 'ICC Member',
+        totalAssigned: assigned.length,
+        activeCases: active.length,
+        resolvedCases: resolved.length,
+        urgentCases: urgent.length,
+        avgResolutionHours,
+        slaBreaches,
+        resolutionRate: assigned.length > 0 ? Math.round((resolved.length / assigned.length) * 100) : 0,
+        statusBreakdown,
+      };
+    });
+
+    // Sort by active cases descending
+    officerMetrics.sort((a, b) => b.activeCases - a.activeCases);
+
+    // System-wide workload distribution
+    const statusDistribution = {};
+    allComplaints.forEach(c => {
+      statusDistribution[c.status] = (statusDistribution[c.status] || 0) + 1;
+    });
+
+    const priorityDistribution = {};
+    allComplaints.forEach(c => {
+      priorityDistribution[c.priority] = (priorityDistribution[c.priority] || 0) + 1;
+    });
+
+    // Unassigned cases
+    const unassigned = allComplaints.filter(c => !c.assignedAdminId && c.status !== 'Resolved').length;
+
+    // Overall metrics
+    const totalResolved = allComplaints.filter(c => c.status === 'Resolved').length;
+    const totalActive = allComplaints.filter(c => c.status !== 'Resolved').length;
+    const totalSlaBreaches = allComplaints.filter(c => {
+      const created = new Date(c.createdAt);
+      return c.status !== 'Resolved' && (now - created) > (7 * 24 * 60 * 60 * 1000);
+    }).length;
+
+    // Complaints received per month (last 6 months)
+    const monthlyData = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      const monthName = d.toLocaleString('default', { month: 'short', year: '2-digit' });
+      const count = allComplaints.filter(c => {
+        const cd = new Date(c.createdAt);
+        return cd >= d && cd <= monthEnd;
+      }).length;
+      const resolvedCount = allComplaints.filter(c => {
+        const cd = new Date(c.createdAt);
+        return cd >= d && cd <= monthEnd && c.status === 'Resolved';
+      }).length;
+      monthlyData.push({ month: monthName, total: count, resolved: resolvedCount });
+    }
+
+    res.json({
+      success: true,
+      officerMetrics,
+      systemOverview: {
+        totalOfficers: officers.length,
+        totalComplaints: allComplaints.length,
+        totalActive,
+        totalResolved,
+        unassigned,
+        totalSlaBreaches,
+        overallResolutionRate: allComplaints.length > 0 ? Math.round((totalResolved / allComplaints.length) * 100) : 0,
+        statusDistribution,
+        priorityDistribution,
+      },
+      monthlyData,
+    });
+  } catch (err) {
+    console.error('Workload analytics error:', err);
+    res.status(500).json({ success: false, message: 'Failed to load workload analytics.' });
+  }
+});
+
 module.exports = router;

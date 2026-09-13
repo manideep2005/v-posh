@@ -47,6 +47,54 @@ export function AuthProvider({ children }) {
     throw new Error(res.message || 'Login failed');
   };
 
+  // KratosID passwordless — sends push to user's phone, long-polls server-side
+  const kratosLogin = async (email) => {
+    const res = await apiFetch('/auth/kratosid/verify', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+    if (res.success && res.token) {
+      localStorage.setItem('vposh_token', res.token);
+      setUser(res.user);
+      return res.user;
+    }
+    throw new Error(res.message || 'KratosID authentication failed');
+  };
+
+  // KratosID QR Login — starts QR session, then polls for approval
+  const startQrLogin = async () => {
+    const res = await apiFetch('/auth/kratosid/qr/start', { method: 'POST', body: '{}' });
+    return res; // { token, qrPayload, expiresAt, expiresIn }
+  };
+
+  const pollQrLogin = async (qrToken) => {
+    const res = await apiFetch('/auth/kratosid/qr/poll', {
+      method: 'POST',
+      body: JSON.stringify({ token: qrToken })
+    });
+    if (res.success && res.token) {
+      localStorage.setItem('vposh_token', res.token);
+      setUser(res.user);
+      return res.user;
+    }
+    throw new Error(res.message || 'QR login failed');
+  };
+
+  // Google OAuth — sends ID token to backend for verification + JWT issuance
+  const googleLogin = async (idToken) => {
+    const res = await apiFetch('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken })
+    });
+
+    if (res.success && res.token) {
+      localStorage.setItem('vposh_token', res.token);
+      setUser(res.user);
+      return res.user;
+    }
+    throw new Error(res.message || 'Google sign-in failed');
+  };
+
   const signupStudent = async (studentData) => {
     const res = await apiFetch('/auth/student/signup', {
       method: 'POST',
@@ -71,6 +119,10 @@ export function AuthProvider({ children }) {
       user,
       loading,
       login,
+      googleLogin,
+      kratosLogin,
+      startQrLogin,
+      pollQrLogin,
       signupStudent,
       logout,
       checkCurrentSession
@@ -83,3 +135,4 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
+

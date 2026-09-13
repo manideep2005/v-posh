@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logAuditAction } = require('../middleware/audit');
+const { sendEmail, TEMPLATES } = require('../services/email');
 
 // Middleware to enforce Admin / Super Admin access
 router.use(authenticateToken, requireRole(['admin', 'super_admin']));
@@ -227,7 +228,7 @@ router.put('/complaints/:id/status', async (req, res) => {
         comment: comment || `Status updated from ${previousStatus} to ${status}`
       });
 
-      // Send student notification
+      // Send student notification (in-app)
       await db.notifications.insertOne({
         userId: complaint.userId,
         title: `Complaint Status: ${status}`,
@@ -236,6 +237,21 @@ router.put('/complaints/:id/status', async (req, res) => {
         referenceId: complaint.referenceId,
         isRead: false
       });
+
+      // Send status update email to student
+      const studentUser = await db.users.findById(complaint.userId);
+      if (studentUser) {
+        sendEmail({
+          to: studentUser.email,
+          ...TEMPLATES.statusUpdated({
+            referenceId: complaint.referenceId,
+            studentName: studentUser.name,
+            previousStatus,
+            newStatus: status,
+            comment: comment || '',
+          })
+        }).catch(err => console.error('[Email] Status update email failed:', err.message));
+      }
     }
 
     logAuditAction(
@@ -283,7 +299,7 @@ router.post('/complaints/:id/updates', async (req, res) => {
     });
 
     if (isPublicBool) {
-      // Notify student of official update
+      // Notify student of official update (in-app)
       await db.notifications.insertOne({
         userId: complaint.userId,
         title: 'New Official Update on Complaint',
@@ -292,6 +308,20 @@ router.post('/complaints/:id/updates', async (req, res) => {
         referenceId: complaint.referenceId,
         isRead: false
       });
+
+      // Send official update email to student
+      const updateStudent = await db.users.findById(complaint.userId);
+      if (updateStudent) {
+        sendEmail({
+          to: updateStudent.email,
+          ...TEMPLATES.officialUpdate({
+            referenceId: complaint.referenceId,
+            studentName: updateStudent.name,
+            authorName: req.user.name,
+            updateText: String(updateText).trim(),
+          })
+        }).catch(err => console.error('[Email] Official update email failed:', err.message));
+      }
     }
 
     logAuditAction(
@@ -363,6 +393,351 @@ router.put('/students/:id/status', async (req, res) => {
   } catch (err) {
     console.error('Student status error:', err);
     res.status(500).json({ success: false, message: 'Failed to update student status.' });
+  }
+});
+
+// ─── Case Allocation ───────────────────────────────────────────────────────
+
+// List available officers (admin + super_admin) with workload info
+router.get('/available-officers', async (req, res) => {
+  try {
+    const officers = await db.users.find({
+      role: { $in: ['admin', 'super_admin'] },
+      status: 'active'
+    });
+
+    const complaints = await db.complaints.find();
+
+    const officersWithWorkload = officers.map(officer => {
+      const activeCases = complaints.filter(
+        c => c.assignedAdminId === officer.id && c.status !== 'Resolved'
+      ).length;
+      const totalCases = complaints.filter(
+        c => c.assignedAdminId === officer.id
+      ).length;
+      return {
+        id: officer.id,
+        name: officer.name,
+        email: officer.email,
+        role: officer.role,
+        activeCases,
+        totalCases,
+      };
+    });
+
+    // Sort by active cases ascending (least busy first)
+    officersWithWorkload.sort((a, b) => a.activeCases - b.activeCases);
+
+    res.json({ success: true, officers: officersWithWorkload });
+  } catch (err) {
+    console.error('Available officers error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch available officers.' });
+  }
+});
+
+// Allocate a single case to an officer
+router.post('/complaints/:id/allocate', async (req, res) => {
+  try {
+    const { assignedAdminId } = req.body;
+    const complaint = await db.complaints.findOne(c => c.id === req.params.id || c.referenceId === req.params.id);
+
+    if (!complaint) {
+      return res.status(404).json({ success: false, message: 'Complaint not found.' });
+    }
+
+    if (!assignedAdminId) {
+      return res.status(400).json({ success: false, message: 'assignedAdminId is required.' });
+    }
+
+    const officer = await db.users.findById(assignedAdminId);
+    if (!officer || !['admin', 'super_admin'].includes(officer.role) || officer.status !== 'active') {
+      return res.status(400).json({ success: false, message: 'Selected officer is not valid or not active.' });
+    }
+
+    const updated = await db.complaints.updateOne(complaint.id, {
+      assignedAdminId: officer.id,
+      assignedAdminName: officer.name,
+      status: complaint.status === 'Submitted' ? 'Acknowledged' : complaint.status,
+    });
+
+    // Notify officer
+    await db.notifications.insertOne({
+      userId: officer.id,
+      title: 'Case Assigned to You',
+      message: `Complaint ${complaint.referenceId} has been assigned to you by ${req.user.name}.`,
+      type: 'assignment',
+      referenceId: complaint.referenceId,
+      isRead: false
+    });
+
+    // Timeline entry
+    await db.statusHistory.insertOne({
+      complaintId: complaint.id,
+      previousStatus: null,
+      newStatus: updated.status,
+      changedById: req.user.id,
+      changedByName: req.user.name,
+      changedByRole: req.user.role,
+      comment: `Case allocated to ${officer.name}`
+    });
+
+    // Send email to officer
+    sendEmail({
+      to: officer.email,
+      ...TEMPLATES.caseAssigned({
+        referenceId: complaint.referenceId,
+        title: complaint.title,
+        priority: complaint.priority,
+        status: updated.status,
+        officerName: officer.name,
+        assignedBy: req.user.name,
+      })
+    }).catch(err => console.error('Email failed:', err.message));
+
+    logAuditAction(req, 'COMPLAINT_ASSIGNED', 'COMPLAINT', complaint.id, `Complaint ${complaint.referenceId} allocated to ${officer.name}`);
+
+    res.json({ success: true, message: `Case allocated to ${officer.name}.`, complaint: updated });
+  } catch (err) {
+    console.error('Allocate case error:', err);
+    res.status(500).json({ success: false, message: 'Failed to allocate case.' });
+  }
+});
+
+// Bulk allocate multiple cases to one officer
+router.post('/complaints/bulk-allocate', async (req, res) => {
+  try {
+    const { complaintIds, assignedAdminId } = req.body;
+
+    if (!Array.isArray(complaintIds) || complaintIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'complaintIds array is required.' });
+    }
+    if (!assignedAdminId) {
+      return res.status(400).json({ success: false, message: 'assignedAdminId is required.' });
+    }
+
+    const officer = await db.users.findById(assignedAdminId);
+    if (!officer || !['admin', 'super_admin'].includes(officer.role) || officer.status !== 'active') {
+      return res.status(400).json({ success: false, message: 'Selected officer is not valid or not active.' });
+    }
+
+    let allocated = 0;
+    for (const id of complaintIds) {
+      const complaint = await db.complaints.findOne(c => c.id === id || c.referenceId === id);
+      if (!complaint) continue;
+
+      await db.complaints.updateOne(complaint.id, {
+        assignedAdminId: officer.id,
+        assignedAdminName: officer.name,
+        status: complaint.status === 'Submitted' ? 'Acknowledged' : complaint.status,
+      });
+
+      await db.notifications.insertOne({
+        userId: officer.id,
+        title: 'Case Assigned to You',
+        message: `Complaint ${complaint.referenceId} has been assigned to you by ${req.user.name}.`,
+        type: 'assignment',
+        referenceId: complaint.referenceId,
+        isRead: false
+      });
+
+      await db.statusHistory.insertOne({
+        complaintId: complaint.id,
+        previousStatus: null,
+        newStatus: complaint.status,
+        changedById: req.user.id,
+        changedByName: req.user.name,
+        changedByRole: req.user.role,
+        comment: `Bulk allocation to ${officer.name}`
+      });
+
+      allocated++;
+    }
+
+    logAuditAction(req, 'BULK_COMPLAINT_ASSIGNED', 'COMPLAINT', null, `${allocated} complaints bulk-allocated to ${officer.name}`);
+
+    res.json({ success: true, message: `${allocated} case(s) allocated to ${officer.name}.` });
+  } catch (err) {
+    console.error('Bulk allocate error:', err);
+    res.status(500).json({ success: false, message: 'Failed to bulk allocate cases.' });
+  }
+});
+
+// Auto-assign: pick the least busy active officer for a case
+router.post('/complaints/:id/auto-allocate', async (req, res) => {
+  try {
+    const complaint = await db.complaints.findOne(c => c.id === req.params.id || c.referenceId === req.params.id);
+    if (!complaint) {
+      return res.status(404).json({ success: false, message: 'Complaint not found.' });
+    }
+    if (complaint.assignedAdminId) {
+      return res.status(400).json({ success: false, message: 'Case is already assigned. Unassign first or reassign manually.' });
+    }
+
+    const officers = await db.users.find({ role: { $in: ['admin', 'super_admin'] }, status: 'active' });
+    if (officers.length === 0) {
+      return res.status(400).json({ success: false, message: 'No active officers available for allocation.' });
+    }
+
+    const allComplaints = await db.complaints.find();
+    const workload = officers.map(officer => ({
+      officer,
+      activeCases: allComplaints.filter(c => c.assignedAdminId === officer.id && c.status !== 'Resolved').length,
+    }));
+
+    // Pick officer with fewest active cases
+    workload.sort((a, b) => a.activeCases - b.activeCases);
+    const chosen = workload[0].officer;
+
+    const updated = await db.complaints.updateOne(complaint.id, {
+      assignedAdminId: chosen.id,
+      assignedAdminName: chosen.name,
+      status: complaint.status === 'Submitted' ? 'Acknowledged' : complaint.status,
+    });
+
+    await db.notifications.insertOne({
+      userId: chosen.id,
+      title: 'Case Auto-Assigned to You',
+      message: `Complaint ${complaint.referenceId} has been auto-assigned to you (least workload).`,
+      type: 'assignment',
+      referenceId: complaint.referenceId,
+      isRead: false
+    });
+
+    await db.statusHistory.insertOne({
+      complaintId: complaint.id,
+      previousStatus: null,
+      newStatus: updated.status,
+      changedById: req.user.id,
+      changedByName: req.user.name,
+      changedByRole: req.user.role,
+      comment: `Auto-allocated to ${chosen.name} (${workload[0].activeCases} active cases)`
+    });
+
+    logAuditAction(req, 'COMPLAINT_AUTO_ASSIGNED', 'COMPLAINT', complaint.id, `Complaint ${complaint.referenceId} auto-allocated to ${chosen.name}`);
+
+    res.json({ success: true, message: `Case auto-allocated to ${chosen.name} (${workload[0].activeCases} active cases).`, complaint: updated });
+  } catch (err) {
+    console.error('Auto-allocate error:', err);
+    res.status(500).json({ success: false, message: 'Failed to auto-allocate case.' });
+  }
+});
+
+// Workload overview: all officers with case counts
+router.get('/workload', async (req, res) => {
+  try {
+    const officers = await db.users.find({ role: { $in: ['admin', 'super_admin'] }, status: 'active' });
+    const complaints = await db.complaints.find();
+
+    const workload = officers.map(officer => {
+      const assigned = complaints.filter(c => c.assignedAdminId === officer.id);
+      return {
+        id: officer.id,
+        name: officer.name,
+        email: officer.email,
+        role: officer.role,
+        active: assigned.filter(c => c.status !== 'Resolved').length,
+        resolved: assigned.filter(c => c.status === 'Resolved').length,
+        total: assigned.length,
+      };
+    });
+
+    workload.sort((a, b) => b.active - a.active);
+    res.json({ success: true, workload });
+  } catch (err) {
+    console.error('Workload error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch workload data.' });
+  }
+});
+
+// ─── Faculty Management ─────────────────────────────────────────────────────
+
+// List all faculty
+router.get('/faculty', async (req, res) => {
+  try {
+    const { search, department } = req.query;
+    let faculty = await db.users.find({ role: 'faculty' });
+
+    if (department && department !== 'ALL') {
+      faculty = faculty.filter(f => f.department === department);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      faculty = faculty.filter(f =>
+        (f.name || '').toLowerCase().includes(q) ||
+        (f.email || '').toLowerCase().includes(q)
+      );
+    }
+
+    const sanitized = await Promise.all(faculty.map(async ({ password, ...rest }) => {
+      const deptComplaints = await db.complaints.find({ studentDept: rest.department });
+      return { ...rest, departmentComplaintCount: deptComplaints.length };
+    }));
+
+    res.json({ success: true, faculty: sanitized });
+  } catch (err) {
+    console.error('Faculty list error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch faculty list.' });
+  }
+});
+
+// Create faculty account
+router.post('/faculty', async (req, res) => {
+  try {
+    const { name, email, password, employeeId, department, designation } = req.body;
+
+    if (!name || !email || !password || !department) {
+      return res.status(400).json({ success: false, message: 'Name, Email, Password, and Department are required.' });
+    }
+    if (typeof password !== 'string' || password.length < 8) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const existing = await db.users.findOne({ email: normalizedEmail });
+    if (existing) {
+      return res.status(409).json({ success: false, message: 'An account with this email already exists.' });
+    }
+
+    const bcrypt = require('bcryptjs');
+    const config = require('../config');
+    const hashedPassword = await bcrypt.hash(password, config.BCRYPT_ROUNDS);
+
+    const newFaculty = await db.users.insertOne({
+      name: String(name).trim(),
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: 'faculty',
+      employeeId: employeeId || '',
+      department,
+      designation: designation || 'Faculty Advisor',
+      status: 'active',
+      lastActiveAt: null,
+    });
+
+    logAuditAction(req, 'FACULTY_ACCOUNT_CREATED', 'USER', newFaculty.id, `Created faculty account: ${name} (${department})`);
+
+    const { password: _, ...safe } = newFaculty;
+    res.status(201).json({ success: true, message: `Faculty account for ${name} created.`, faculty: safe });
+  } catch (err) {
+    console.error('Create faculty error:', err);
+    res.status(500).json({ success: false, message: 'Failed to create faculty account.' });
+  }
+});
+
+// Toggle faculty status
+router.put('/faculty/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    const faculty = await db.users.findById(req.params.id);
+    if (!faculty || faculty.role !== 'faculty') {
+      return res.status(404).json({ success: false, message: 'Faculty account not found.' });
+    }
+    await db.users.updateOne(faculty.id, { status });
+    logAuditAction(req, 'FACULTY_STATUS_TOGGLED', 'USER', faculty.id, `Faculty ${faculty.name} status → ${status}`);
+    res.json({ success: true, message: `Faculty status updated to ${status}.` });
+  } catch (err) {
+    console.error('Faculty status error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update faculty status.' });
   }
 });
 

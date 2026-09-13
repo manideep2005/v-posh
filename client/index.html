@@ -2,12 +2,136 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>" />
+    <link rel="icon" type="image/png" href="/vit-ap-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="V-POSH: VIT-AP University's POSH Awareness and Complaint Management Platform — Internal Complaints Committee (ICC) Grievance Portal." />
     <title>V-POSH | VIT-AP POSH Awareness & Complaint Management Platform</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap');
+
+      #vposh-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: #0F172A;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        transition: opacity 0.5s ease, visibility 0.5s ease;
+      }
+
+      #vposh-splash.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .splash-logo-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        margin-bottom: 1.5rem;
+      }
+
+      .splash-letter {
+        font-family: 'Inter', sans-serif;
+        font-size: clamp(3rem, 10vw, 6rem);
+        font-weight: 900;
+        color: #fff;
+        opacity: 0;
+        transform: translateY(40px) scale(0.8);
+        animation: splashLetterIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        letter-spacing: -0.02em;
+        line-height: 1;
+      }
+
+      .splash-letter.v { animation-delay: 0.05s; color: #14B8A6; }
+      .splash-letter.dash { animation-delay: 0.15s; color: #475569; font-size: clamp(2rem, 6vw, 3.5rem); }
+      .splash-letter.p { animation-delay: 0.25s; }
+      .splash-letter.o { animation-delay: 0.35s; }
+      .splash-letter.s { animation-delay: 0.45s; }
+      .splash-letter.h { animation-delay: 0.55s; }
+
+      @keyframes splashLetterIn {
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .splash-tagline {
+        font-family: 'Inter', sans-serif;
+        font-size: clamp(0.65rem, 2vw, 0.85rem);
+        color: #64748B;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        opacity: 0;
+        animation: fadeUp 0.6s ease forwards;
+        animation-delay: 0.75s;
+        margin-bottom: 2.5rem;
+      }
+
+      .splash-bar-wrap {
+        width: clamp(140px, 30vw, 220px);
+        height: 2px;
+        background: #1E293B;
+        border-radius: 99px;
+        overflow: hidden;
+        opacity: 0;
+        animation: fadeUp 0.4s ease forwards;
+        animation-delay: 0.9s;
+      }
+
+      .splash-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #14B8A6, #3B82F6);
+        border-radius: 99px;
+        animation: barFill 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        animation-delay: 1s;
+      }
+
+      @keyframes barFill {
+        to { width: 100%; }
+      }
+
+      @keyframes fadeUp {
+        to { opacity: 1; }
+      }
+    </style>
   </head>
   <body>
+    <!-- Splash Screen -->
+    <div id="vposh-splash">
+      <div class="splash-logo-wrap">
+        <span class="splash-letter v">V</span>
+        <span class="splash-letter dash">-</span>
+        <span class="splash-letter p">P</span>
+        <span class="splash-letter o">O</span>
+        <span class="splash-letter s">S</span>
+        <span class="splash-letter h">H</span>
+      </div>
+      <p class="splash-tagline">VIT-AP University &nbsp;·&nbsp; ICC Grievance Portal</p>
+      <div class="splash-bar-wrap">
+        <div class="splash-bar"></div>
+      </div>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Hide splash after 2.4s (letters + bar animation finishes)
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          var splash = document.getElementById('vposh-splash');
+          if (splash) {
+            splash.classList.add('hidden');
+            setTimeout(function () { splash.remove(); }, 600);
+          }
+        }, 2400);
+      });
+    </script>
   </body>
 </html>

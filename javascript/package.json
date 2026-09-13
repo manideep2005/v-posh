@@ -1,0 +1,11 @@
+{
+  "name": "quantanex",
+  "version": "1.0.0",
+  "description": "KratosID passwordless authentication SDK",
+  "main": "src/index.js",
+  "repository": { "type": "git", "url": "https://github.com/quantanex-io/quantanex-js" },
+  "keywords": ["passwordless", "authentication", "mfa", "biometric"],
+  "author": "KratosID <support@quantanex.io>",
+  "license": "MIT",
+  "engines": { "node": ">=18.0.0" }
+}

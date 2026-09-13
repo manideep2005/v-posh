@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logAuditAction } = require('../middleware/audit');
+const { sendEmail, TEMPLATES } = require('../services/email');
 
 // Middleware to ensure user is student
 router.use(authenticateToken, requireRole(['student']));
@@ -121,7 +122,7 @@ router.post('/complaints', async (req, res) => {
       comment: 'Complaint officially registered by student.'
     });
 
-    // Send confirmation notification to student
+    // Send confirmation notification to student (in-app)
     await db.notifications.insertOne({
       userId: req.user.id,
       title: 'Complaint Registered',
@@ -130,6 +131,17 @@ router.post('/complaints', async (req, res) => {
       referenceId: newComplaint.referenceId,
       isRead: false
     });
+
+    // Send confirmation email to student
+    sendEmail({
+      to: req.user.email,
+      ...TEMPLATES.complaintSubmitted({
+        referenceId,
+        studentName: req.user.name,
+        title: String(title).trim(),
+        category,
+      })
+    }).catch(err => console.error('[Email] Complaint submission email failed:', err.message));
 
     logAuditAction(req, 'COMPLAINT_SUBMITTED', 'COMPLAINT', newComplaint.id, `Student raised complaint ${referenceId}`);
 

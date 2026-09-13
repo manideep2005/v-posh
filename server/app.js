@@ -7,6 +7,7 @@ const db = require('./db');
 const authRoutes = require('./routes/auth');
 const studentRoutes = require('./routes/student');
 const adminRoutes = require('./routes/admin');
+const facultyRoutes = require('./routes/faculty');
 const superAdminRoutes = require('./routes/superAdmin');
 const notificationRoutes = require('./routes/notifications');
 const uploadRoutes = require('./routes/uploads');
@@ -60,6 +61,7 @@ function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/student', studentRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/faculty', facultyRoutes);
   app.use('/api/super-admin', superAdminRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/uploads', uploadRoutes);

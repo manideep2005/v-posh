@@ -20,6 +20,8 @@ export default function AdminLogin() {
       const user = await login(email, password, 'admin');
       if (user.role === 'super_admin') {
         navigate('/super-admin/dashboard');
+      } else if (user.role === 'faculty') {
+        navigate('/faculty/dashboard');
       } else {
         navigate('/admin/dashboard');
       }
@@ -38,10 +40,10 @@ export default function AdminLogin() {
             <ShieldCheck size={24} />
           </div>
           <h2 style={{ fontSize: '1.35rem', fontWeight: '700', color: 'var(--color-navy-900)' }}>
-            ICC & Administrative Portal Sign In
+            Staff Portal Sign In
           </h2>
           <p style={{ fontSize: '0.8125rem', color: 'var(--color-slate-600)', marginTop: '0.25rem' }}>
-            Authorized Internal Complaints Committee members & Super Admins only
+            Admin, Super Admin, and Faculty access
           </p>
         </div>
 
@@ -87,10 +89,8 @@ export default function AdminLogin() {
           >
             {loading ? 'Verifying Authorization...' : 'Access Admin Workspace'} <ArrowRight size={16} />
           </button>
-        </form>
-
-        <div style={{ backgroundColor: 'var(--color-slate-100)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', marginTop: '1.5rem', fontSize: '0.75rem', color: 'var(--color-slate-600)', textAlign: 'center' }}>
-          <strong>Notice:</strong> All administrative access is logged under statutory audit regulations. Unauthorized access attempts are monitored and recorded.
+        </form>          <div style={{ backgroundColor: 'var(--color-slate-100)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', marginTop: '1.5rem', fontSize: '0.75rem', color: 'var(--color-slate-600)', textAlign: 'center' }}>
+          <strong>Notice:</strong> All staff access is logged under statutory audit regulations. Unauthorized access attempts are monitored and recorded.
         </div>
       </div>
     </div>

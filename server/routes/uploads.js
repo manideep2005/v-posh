@@ -16,8 +16,14 @@ const { authenticateToken } = require('../middleware/auth');
 // ---------------------------------------------------------------------------
 
 const DISK_UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(DISK_UPLOAD_DIR)) {
-  fs.mkdirSync(DISK_UPLOAD_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(DISK_UPLOAD_DIR)) {
+    fs.mkdirSync(DISK_UPLOAD_DIR, { recursive: true });
+  }
+} catch (err) {
+  // Read-only filesystem (Vercel/Lambda): disk storage unavailable, but the
+  // module must still load — GridFS is used whenever MongoDB is configured.
+  console.warn('Uploads dir not writable, disk evidence storage disabled:', err.message);
 }
 
 // Memory storage keeps the flow serverless-safe; the buffer is then written
