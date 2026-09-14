@@ -379,7 +379,7 @@ function renderRulesBlock(d, y, complaint) {
     },
     {
       heading: 'False or Malicious Complaints',
-        body: [
+      body: [
         'Where the ICC concludes that the allegation of sexual harassment has not been proved, no action shall be taken against the complainant. However, if the inquiry establishes that the complaint was malicious, was knowingly false, or was made with the intent to defame or to humiliate, the ICC may recommend action against the complainant in accordance with applicable service rules or institutional policy.',
         'An action to counter a malicious or knowingly false complaint does not, by itself, discourage or deter genuine complaints made in good faith.',
       ],
@@ -391,6 +391,9 @@ function renderRulesBlock(d, y, complaint) {
   const ruleTextGap = 4;
   const left = d.M;
   const width = d.cw;
+  const fontSize = 8.5;
+
+  d.doc.font(F.regular).fontSize(fontSize);
 
   for (const rule of rules) {
     // Determine whether the heading itself fits on the current page.
@@ -401,16 +404,28 @@ function renderRulesBlock(d, y, complaint) {
       .text(rule.heading.toUpperCase(), left, y, { width });
     y = d.doc.y + ruleGap;
     if (y > d.H - d.M - 20) { y = d.newPage(); }
+    d.doc.font(F.regular).fontSize(fontSize).fillColor(COLORS.navyLight);
     for (const para of rule.body) {
-      const lines = wordWrap(d, para, width);
+      // Compute lines that fit the width WITHOUT breaking words.
+      // pdfkit's text() with a width can break long words; we avoid that
+      // by pre-splitting on spaces and only wrapping at space boundaries.
+      const lines = wrapLines(d, para, width);
       if (lines.length === 0) continue;
-      // If the first line won't fit, push to next page.
-      if (y + 8 * lines.length + 6 > d.H - d.M - 20) {
+      // If the block won't fit, move to next page.
+      if (y + fontSize * lines.length + (lines.length - 1) * 2.5 + 6 > d.H - d.M - 20) {
         y = d.newPage();
       }
-      d.doc.font(F.regular).fontSize(8.5).fillColor(COLORS.navyLight)
-        .text(para, left, y, { width, lineGap: 2.5 });
-      y = d.doc.y + ruleTextGap;
+      for (const line of lines) {
+        if (y + fontSize + 4 > d.H - d.M - 20) { y = d.newPage(); }
+        // Render each pre-wrapped line as a single line. We MUST pass
+        // lineBreak: false so pdfkit does not attempt its own wrapping
+        // (which breaks words with negative spacing in the TJ array).
+        // We also omit width entirely — with lineBreak: false and no width
+        // pdfkit renders the string exactly as given on one line.
+        d.doc.text(line, left, y, { lineBreak: false, lineGap: 2.5 });
+        y = d.doc.y;
+      }
+      y += ruleTextGap;
     }
     d.doc.save().moveTo(left, y).lineTo(left + width, y)
       .lineWidth(0.4).strokeColor(COLORS.slateMuted).stroke();
@@ -419,33 +434,25 @@ function renderRulesBlock(d, y, complaint) {
   return d.doc.y;
 }
 
-function wordWrap(d, text, width) {
-  // Return an array of lines by splitting on explicit newlines and wrapping
-  // long runs to the available width using pdfkit's measurement.
+function wrapLines(d, text, width) {
+  // Wrap `text` to `width` using only space boundaries (never break a word).
+  // Uses pdfkit's widthOfString for measurement.
+  d.doc.font(F.regular).fontSize(8.5);
   const out = [];
-  const fn = d.doc.font(F.regular).fontSize(8.5);
-  for (const chunk of text.split('\n')) {
-    let remainder = chunk;
-    while (remainder.length) {
-      if (d.doc.widthOfString(remainder) <= width) {
-        out.push(remainder);
-        break;
+  for (const paragraph of text.split('\n')) {
+    if (paragraph === '') { out.push(''); continue; }
+    const words = paragraph.split(' ');
+    let line = words[0];
+    for (let i = 1; i < words.length; i++) {
+      const candidate = line + ' ' + words[i];
+      if (d.doc.widthOfString(candidate) <= width) {
+        line = candidate;
+      } else {
+        out.push(line);
+        line = words[i];
       }
-      // Find a safe split point before width is exceeded.
-      let cut = Math.floor(remainder.length / 2);
-      let lo = 0, hi = remainder.length;
-      for (let i = 0; i < 60 && lo < hi; i++) {
-        cut = Math.floor((lo + hi) / 2);
-        const candidate = remainder.slice(0, cut + 1).replace(/\s\S*$/, '');
-        if (!candidate || d.doc.widthOfString(candidate) > width) hi = cut;
-        else lo = Math.max(cut, candidate.length);
-      }
-      const safe = remainder.slice(0, Math.max(lo, 1));
-      out.push(safe || remainder.slice(0, 15));
-      remainder = remainder.slice(Math.max(lo, 1)).trimStart();
-      if (!remainder && safe) break;
     }
-    if (!remainder && out[out.length - 1] === chunk) break;
+    out.push(line);
   }
   return out;
 }

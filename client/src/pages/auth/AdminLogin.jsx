@@ -162,6 +162,17 @@ export default function AdminLogin() {
 
         {/* ── KratosID Section ── */}
         <div style={{ background: 'var(--color-navy-900)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1rem' }}>
+          {/* Maintenance banner */}
+          <div style={{
+            marginBottom: '1rem', padding: '0.65rem 0.9rem',
+            backgroundColor: 'rgba(251,191,36,0.12)',
+            border: '1px solid rgba(251,191,36,0.4)',
+            borderRadius: '6px',
+            fontSize: '0.78rem', color: '#FCD34D', textAlign: 'center'
+          }}>
+            <strong>⚠️ We’re having issues with KratosID email authentication.</strong>
+            {' '}Use the <strong>QR Code</strong> tab or <strong>Google Sign-In</strong> below to log in.
+          </div>
           {/* Tabs */}
           <div style={{ display: 'flex', gap: '4px', marginBottom: '1rem', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px' }}>
             <button

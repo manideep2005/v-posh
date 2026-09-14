@@ -15,10 +15,6 @@ const awarenessRoutes = require('./routes/awareness');
 const attachmentRoutes = require('./routes/attachments');
 const pdfRoutes = require('./routes/pdf');
 
-// ---------------------------------------------------------------------------
-// The Express application. Imported by server/index.js (long-running node
-// process) and by the Vercel serverless entry (api/index.js).
-// ---------------------------------------------------------------------------
 
 function createApp() {
   const app = express();
@@ -80,7 +76,7 @@ function createApp() {
     });
   });
 
-  // Undefined API routes return JSON, not the SPA shell
+ 
   app.use('/api', (req, res) => {
     res.status(404).json({ success: false, message: 'API endpoint not found.' });
   });
