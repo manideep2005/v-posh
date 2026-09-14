@@ -37,13 +37,15 @@ const MONGO_COLLECTIONS = {
   notifications: 'notifications',
   auditLogs: 'audit_logs',
   departments: 'departments',
-  categories: 'complaint_categories'
+  categories: 'complaint_categories',
+  announcements: 'announcements'
 };
 
 const JSON_COLLECTION_KEYS = {
   ...MONGO_COLLECTIONS,
   departments: 'departments',
-  categories: 'complaint_categories'
+  categories: 'complaint_categories',
+  announcements: 'announcements'
 };
 
 let driver = null; // 'mongodb' | 'json'

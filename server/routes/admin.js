@@ -4,6 +4,7 @@ const db = require('../db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logAuditAction } = require('../middleware/audit');
 const { sendEmail, TEMPLATES } = require('../services/email');
+const { getSLAStatus } = require('../services/sla');
 
 // Middleware to enforce Admin / Super Admin access
 router.use(authenticateToken, requireRole(['admin', 'super_admin']));
@@ -138,13 +139,16 @@ router.get('/complaints/:id', async (req, res) => {
 
     logAuditAction(req, 'COMPLAINT_VIEWED', 'COMPLAINT', complaint.id, `Admin ${req.user.name} viewed complaint ${complaint.referenceId}`);
 
+    const sla = getSLAStatus(complaint);
+
     res.json({
       success: true,
       complaint,
       history,
       updates,
       attachments: complaintAttachments,
-      assignedAdmin
+      assignedAdmin,
+      sla
     });
   } catch (err) {
     console.error('Admin complaint detail error:', err);
@@ -738,6 +742,17 @@ router.put('/faculty/:id/status', async (req, res) => {
   } catch (err) {
     console.error('Faculty status error:', err);
     res.status(500).json({ success: false, message: 'Failed to update faculty status.' });
+  }
+});
+
+// ─── System Announcements ──────────────────────────────────────────────────
+
+router.get('/announcements', async (req, res) => {
+  try {
+    const announcements = (await db.announcements?.find() || []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json({ success: true, announcements });
+  } catch (err) {
+    res.json({ success: true, announcements: [] });
   }
 });
 

@@ -45,8 +45,11 @@ export default function StudentLogin() {
     setError('');
     setKratosState('waiting');
     try {
-      await kratosLogin(kratosEmail);
-      navigate('/student/dashboard');
+      const user = await kratosLogin(kratosEmail);
+      if (user.role === 'faculty') navigate('/faculty/dashboard');
+      else if (user.role === 'admin') navigate('/admin/dashboard');
+      else if (user.role === 'super_admin') navigate('/super-admin/dashboard');
+      else navigate('/student/dashboard');
     } catch (err) {
       setKratosState('idle');
       setError(err.message || 'KratosID authentication failed.');
@@ -76,10 +79,13 @@ export default function StudentLogin() {
       // Start polling
       pollRef.current = setInterval(async () => {
         try {
-          await pollQrLogin(res.token);
+          const user = await pollQrLogin(res.token);
           clearInterval(pollRef.current);
           clearInterval(countdownRef.current);
-          navigate('/student/dashboard');
+          if (user.role === 'faculty') navigate('/faculty/dashboard');
+          else if (user.role === 'admin') navigate('/admin/dashboard');
+          else if (user.role === 'super_admin') navigate('/super-admin/dashboard');
+          else navigate('/student/dashboard');
         } catch (err) {
           if (err.message && (err.message.includes('timed out') || err.message.includes('denied') || err.message.includes('expired'))) {
             clearInterval(pollRef.current);
@@ -119,7 +125,11 @@ export default function StudentLogin() {
         }).then(r => r.json());
         if (res.success && res.token) {
           localStorage.setItem('vposh_token', res.token);
-          window.location.href = '/student/dashboard';
+          const role = res.user?.role || 'student';
+          if (role === 'faculty') window.location.href = '/faculty/dashboard';
+          else if (role === 'admin') window.location.href = '/admin/dashboard';
+          else if (role === 'super_admin') window.location.href = '/super-admin/dashboard';
+          else window.location.href = '/student/dashboard';
         } else {
           setError(res.message || 'Google sign-in failed.');
         }

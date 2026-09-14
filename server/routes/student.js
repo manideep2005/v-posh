@@ -4,6 +4,7 @@ const db = require('../db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logAuditAction } = require('../middleware/audit');
 const { sendEmail, TEMPLATES } = require('../services/email');
+const { getSLAStatus } = require('../services/sla');
 
 // Middleware to ensure user is student
 router.use(authenticateToken, requireRole(['student']));
@@ -196,12 +197,16 @@ router.get('/complaints/:id', async (req, res) => {
     // Attachments
     const complaintAttachments = await db.attachments.find({ complaintId: complaint.id });
 
+    // Calculate SLA status
+    const sla = getSLAStatus(complaint);
+
     res.json({
       success: true,
       complaint,
       history,
       updates: publicUpdates,
-      attachments: complaintAttachments
+      attachments: complaintAttachments,
+      sla
     });
   } catch (err) {
     console.error('Complaint detail error:', err);
@@ -224,6 +229,84 @@ router.put('/profile', async (req, res) => {
   } catch (err) {
     console.error('Profile update error:', err);
     res.status(500).json({ success: false, message: 'Failed to update profile.' });
+  }
+});
+
+// SLA status for all student complaints
+router.get('/complaints-sla', async (req, res) => {
+  try {
+    const complaints = await db.complaints.find({ userId: req.user.id });
+    const slaMap = {};
+    for (const c of complaints) {
+      slaMap[c.id] = getSLAStatus(c);
+    }
+    res.json({ success: true, sla: slaMap });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to fetch SLA data.' });
+  }
+});
+
+// ─── Pause Complaint ─────────────────────────────────────────────────────────
+router.put('/complaints/:id/pause', async (req, res) => {
+  try {
+    const complaint = await db.complaints.findOne(c => c.id === req.params.id || c.referenceId === req.params.id);
+    if (!complaint) return res.status(404).json({ success: false, message: 'Complaint not found.' });
+    if (complaint.userId !== req.user.id) return res.status(403).json({ success: false, message: 'Forbidden.' });
+    if (complaint.status === 'Resolved') return res.status(400).json({ success: false, message: 'Cannot pause a resolved complaint.' });
+
+    const newPaused = !complaint.paused;
+    await db.complaints.updateOne(complaint.id, { paused: newPaused });
+
+    await db.statusHistory.insertOne({
+      complaintId: complaint.id,
+      previousStatus: complaint.status,
+      newStatus: complaint.status,
+      changedById: req.user.id,
+      changedByName: req.user.name,
+      changedByRole: 'student',
+      comment: newPaused ? 'Complaint paused by student' : 'Complaint resumed by student'
+    });
+
+    logAuditAction(req, newPaused ? 'COMPLAINT_PAUSED' : 'COMPLAINT_RESUMED', 'COMPLAINT', complaint.id,
+      `${newPaused ? 'Paused' : 'Resumed'} complaint ${complaint.referenceId}`);
+
+    res.json({ success: true, message: newPaused ? 'Complaint paused.' : 'Complaint resumed.', paused: newPaused });
+  } catch (err) {
+    console.error('Pause error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update complaint.' });
+  }
+});
+
+// ─── Delete Complaint ───────────────────────────────────────────────────────
+router.delete('/complaints/:id', async (req, res) => {
+  try {
+    const complaint = await db.complaints.findOne(c => c.id === req.params.id || c.referenceId === req.params.id);
+    if (!complaint) return res.status(404).json({ success: false, message: 'Complaint not found.' });
+    if (complaint.userId !== req.user.id) return res.status(403).json({ success: false, message: 'Forbidden.' });
+
+    const deletable = ['Submitted', 'Acknowledged'];
+    if (!deletable.includes(complaint.status)) {
+      return res.status(400).json({ success: false, message: `Cannot delete complaint in "${complaint.status}" status. Only Submitted or Acknowledged complaints can be deleted.` });
+    }
+
+    // Clean up related data
+    try {
+      const hist = await db.statusHistory.find({ complaintId: complaint.id });
+      for (const h of hist) await db.statusHistory.deleteOne(h.id);
+      const updates = await db.complaintUpdates.find({ complaintId: complaint.id });
+      for (const u of updates) await db.complaintUpdates.deleteOne(u.id);
+      const notifs = await db.notifications.find({ referenceId: complaint.referenceId });
+      for (const n of notifs) await db.notifications.deleteOne(n.id);
+    } catch {}
+
+    await db.complaints.deleteOne(complaint.id);
+
+    logAuditAction(req, 'COMPLAINT_DELETED', 'COMPLAINT', complaint.id, `Student deleted complaint ${complaint.referenceId}`);
+
+    res.json({ success: true, message: 'Complaint deleted successfully.' });
+  } catch (err) {
+    console.error('Delete error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete complaint.' });
   }
 });
 

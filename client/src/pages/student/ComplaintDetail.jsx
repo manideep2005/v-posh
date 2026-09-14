@@ -4,7 +4,47 @@ import { apiFetch, formatDate } from '../../utils/api';
 import StatusBadge from '../../components/StatusBadge';
 import Timeline from '../../components/Timeline';
 import AttachmentList from '../../components/AttachmentList';
-import { Lock, FileText, ArrowLeft, Shield } from 'lucide-react';
+import { Lock, FileText, ArrowLeft, Shield, Paperclip, Download } from 'lucide-react';
+import SLACountdown from '../../components/SLACountdown';
+
+function PDFDownloadButton({ complaintId, type, label }) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const token = localStorage.getItem('vposh_token');
+      const res = await fetch(`/api/pdf/student/complaints/${complaintId}/${type}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = res.headers.get('content-displacement')?.split('filename="')[1]?.replace('"', '') || `VPOSH_${type}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download PDF.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <button onClick={handleDownload} disabled={downloading} style={{
+      padding: '0.35rem 0.65rem', background: 'var(--color-navy-900)', border: 'none',
+      borderRadius: 'var(--radius-sm)', fontSize: '0.7rem', cursor: downloading ? 'wait' : 'pointer',
+      fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+      color: '#fff', fontWeight: '600', opacity: downloading ? 0.6 : 1,
+    }}>
+      <Download size={11} /> {downloading ? 'Generating...' : label}
+    </button>
+  );
+}
 
 export default function ComplaintDetail() {
   const { id } = useParams();
@@ -46,7 +86,7 @@ export default function ComplaintDetail() {
     );
   }
 
-  const { complaint, history = [], updates = [], attachments = [] } = data;
+  const { complaint, history = [], updates = [], attachments = [], sla } = data;
 
   return (
     <div className="container" style={{ padding: '3rem 1.5rem' }}>
@@ -55,6 +95,9 @@ export default function ComplaintDetail() {
           <ArrowLeft size={14} /> Back to Complaints List
         </Link>
       </div>
+
+      {/* SLA Countdown */}
+      {sla && <SLACountdown sla={sla} />}
 
       {/* Header Overview Card */}
       <div className="panel" style={{ borderTop: '4px solid var(--color-navy-900)' }}>
@@ -73,6 +116,11 @@ export default function ComplaintDetail() {
           <div style={{ textAlign: 'right', fontSize: '0.8125rem', color: 'var(--color-slate-500)' }}>
             <div>Submitted On: <strong>{formatDate(complaint.createdAt)}</strong></div>
             <div>Category: <strong>{complaint.category}</strong></div>
+            <div>Priority: <strong style={{ color: complaint.priority === 'Urgent' ? '#DC2626' : complaint.priority === 'High' ? '#EA580C' : 'inherit' }}>{complaint.priority}</strong></div>
+            <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.35rem' }}>
+              <PDFDownloadButton complaintId={complaint.id} type="acknowledgement" label="Acknowledgement" />
+              <PDFDownloadButton complaintId={complaint.id} type="status-report" label="Status Report" />
+            </div>
           </div>
         </div>
       </div>
@@ -108,6 +156,12 @@ export default function ComplaintDetail() {
             </div>
 
             <div>
+              {complaint.respondentDept && (
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <strong style={{ color: 'var(--color-slate-500)', display: 'block', fontSize: '0.75rem', textTransform: 'uppercase' }}>Respondent Department</strong>
+                  <span>{complaint.respondentDept}</span>
+                </div>
+              )}
               <strong style={{ color: 'var(--color-slate-500)', display: 'block', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.35rem' }}>Full Description Statement</strong>
               <div style={{ background: 'var(--color-slate-50)', border: '1px solid var(--color-slate-200)', padding: '1rem', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem', lineHeight: '1.6', whiteSpace: 'pre-wrap', color: 'var(--color-slate-800)' }}>
                 {complaint.description}

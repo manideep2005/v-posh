@@ -15,6 +15,8 @@ import StudentSignup from './pages/auth/StudentSignup';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import AdminLogin from './pages/auth/AdminLogin';
+import FacultyLogin from './pages/auth/FacultyLogin';
+import SuperAdminLogin from './pages/auth/SuperAdminLogin';
 
 // Student Pages
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -45,6 +47,7 @@ import SuperAdminAdmins from './pages/superAdmin/SuperAdminAdmins';
 import SuperAdminAuditLogs from './pages/superAdmin/SuperAdminAuditLogs';
 import SuperAdminSettings from './pages/superAdmin/SuperAdminSettings';
 import SuperAdminWorkload from './pages/superAdmin/SuperAdminWorkload';
+import SuperAdminAnnouncements from './pages/superAdmin/SuperAdminAnnouncements';
 
 export default function App() {
   return (
@@ -64,6 +67,8 @@ export default function App() {
               <Route path="/auth/student/forgot-password" element={<ForgotPassword />} />
               <Route path="/auth/reset-password" element={<ResetPassword />} />
               <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/faculty/login" element={<FacultyLogin />} />
+              <Route path="/super-admin/login" element={<SuperAdminLogin />} />
 
               {/* Student Protected Routes (RBAC) */}
               <Route path="/student/dashboard" element={<ProtectedRoute allowedRoles={['student']}><StudentDashboard /></ProtectedRoute>} />
@@ -98,6 +103,7 @@ export default function App() {
               <Route path="/super-admin/complaints" element={<ProtectedRoute allowedRoles={['super_admin']}><AdminComplaints /></ProtectedRoute>} />
               <Route path="/super-admin/students" element={<ProtectedRoute allowedRoles={['super_admin']}><AdminStudents /></ProtectedRoute>} />
               <Route path="/super-admin/audit-logs" element={<ProtectedRoute allowedRoles={['super_admin']}><SuperAdminAuditLogs /></ProtectedRoute>} />
+              <Route path="/super-admin/announcements" element={<ProtectedRoute allowedRoles={['super_admin']}><SuperAdminAnnouncements /></ProtectedRoute>} />
               <Route path="/super-admin/settings" element={<ProtectedRoute allowedRoles={['super_admin']}><SuperAdminSettings /></ProtectedRoute>} />
 
               {/* Fallback */}

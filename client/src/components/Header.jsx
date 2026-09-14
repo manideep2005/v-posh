@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -6,19 +6,31 @@ import { LogOut, Menu, X, ChevronDown } from 'lucide-react';
 
 function LoginDropdown() {
   const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState(null);
   const loc = useLocation();
+  const dropdownRef = useRef(null);
 
   useEffect(() => { setOpen(false); }, [loc.pathname]);
 
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
   const roles = [
-    { label: 'Student', path: '/auth/student/login', icon: '🎓', desc: 'Students & scholars' },
-    { label: 'Faculty', path: '/admin/login', icon: '👨‍🏫', desc: 'Faculty members' },
-    { label: 'Admin', path: '/admin/login', icon: '🛡️', desc: 'ICC & Admin staff' },
-    { label: 'Super Admin', path: '/admin/login', icon: '⚙️', desc: 'System administrators' },
+    { label: 'Student', path: '/auth/student/login', desc: 'Students & scholars', color: '#6366F1' },
+    { label: 'Faculty', path: '/faculty/login', desc: 'Faculty members', color: '#3B82F6' },
+    { label: 'Admin', path: '/admin/login', desc: 'ICC & Admin staff', color: '#14B8A6' },
+    { label: 'Super Admin', path: '/super-admin/login', desc: 'System administrators', color: '#8B5CF6' },
   ];
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative' }} ref={dropdownRef}>
       <button
         onClick={() => setOpen(o => !o)}
         className="btn btn-primary btn-sm"
@@ -28,25 +40,39 @@ function LoginDropdown() {
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: '240px',
+          position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: '260px',
           background: '#fff', border: '1px solid var(--color-slate-200)', borderRadius: 'var(--radius-sm)',
-          boxShadow: '0 10px 40px rgba(0,0,0,0.15)', zIndex: 50, overflow: 'hidden',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', zIndex: 50, overflow: 'hidden',
         }}>
-          <div style={{ padding: '0.6rem 0.85rem', borderBottom: '1px solid var(--color-slate-100)', fontSize: '0.7rem', fontWeight: '700', color: 'var(--color-slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Sign in as
+          <div style={{ padding: '0.65rem 1rem', borderBottom: '1px solid var(--color-slate-100)', fontSize: '0.7rem', fontWeight: '700', color: 'var(--color-slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Select your role
           </div>
-          {roles.map(r => (
+          {roles.map((r, i) => (
             <Link key={r.label} to={r.path} style={{
-              display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.65rem 0.85rem',
-              textDecoration: 'none', transition: 'background 0.12s', fontSize: '0.875rem',
+              display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.7rem 1rem',
+              textDecoration: 'none', fontSize: '0.875rem', position: 'relative',
+              background: selected === r.label ? `${r.color}08` : 'transparent',
+              borderLeft: selected === r.label ? `3px solid ${r.color}` : '3px solid transparent',
+              transition: 'all 0.15s ease',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--color-slate-50)'}
-            onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = selected === r.label ? `${r.color}10` : 'var(--color-slate-50)';
+              e.currentTarget.style.borderLeftColor = r.color;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = selected === r.label ? `${r.color}08` : 'transparent';
+              e.currentTarget.style.borderLeftColor = selected === r.label ? r.color : 'transparent';
+            }}
+            onClick={() => setSelected(r.label)}
             >
-              <span style={{ fontSize: '1.1rem' }}>{r.icon}</span>
+              <div style={{
+                width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
+                background: selected === r.label ? r.color : 'var(--color-slate-300)',
+                transition: 'background 0.15s',
+              }} />
               <div>
-                <div style={{ fontWeight: '600', color: 'var(--color-navy-900)' }}>{r.label}</div>
-                <div style={{ fontSize: '0.6875rem', color: 'var(--color-slate-500)' }}>{r.desc}</div>
+                <div style={{ fontWeight: '600', color: 'var(--color-navy-900)', lineHeight: '1.3' }}>{r.label}</div>
+                <div style={{ fontSize: '0.6875rem', color: 'var(--color-slate-500)', lineHeight: '1.3' }}>{r.desc}</div>
               </div>
             </Link>
           ))}
@@ -135,6 +161,7 @@ export default function Header() {
             {user && user.role === 'super_admin' && (<>
               <li><Link to="/super-admin/workload" className={isActive('/super-admin/workload') ? 'active' : ''}>Workload Analytics</Link></li>
               <li><Link to="/super-admin/admins" className={isActive('/super-admin/admins') ? 'active' : ''}>Manage Staff</Link></li>
+              <li><Link to="/super-admin/announcements" className={isActive('/super-admin/announcements') ? 'active' : ''}>Announcements</Link></li>
               <li><Link to="/super-admin/audit-logs" className={isActive('/super-admin/audit-logs') ? 'active' : ''}>Audit Logs</Link></li>
               <li><Link to="/super-admin/settings" className={isActive('/super-admin/settings') ? 'active' : ''}>Settings</Link></li>
             </>)}
@@ -186,16 +213,18 @@ export default function Header() {
           {user && user.role === 'super_admin' && (<>
             <li><Link to="/super-admin/workload" className={isActive('/super-admin/workload') ? 'active' : ''}>Workload Analytics</Link></li>
             <li><Link to="/super-admin/admins" className={isActive('/super-admin/admins') ? 'active' : ''}>Manage Staff</Link></li>
+            <li><Link to="/super-admin/announcements" className={isActive('/super-admin/announcements') ? 'active' : ''}>Announcements</Link></li>
             <li><Link to="/super-admin/audit-logs" className={isActive('/super-admin/audit-logs') ? 'active' : ''}>Audit Logs</Link></li>
             <li><Link to="/super-admin/settings" className={isActive('/super-admin/settings') ? 'active' : ''}>Settings</Link></li>
           </>)}
 
           {!user ? (
             <li className="mobile-nav-auth">
-              <div style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--color-slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Sign in as</div>
-              <Link to="/auth/student/login" className="btn btn-secondary" style={{ textDecoration: 'none', width: '100%', justifyContent: 'center', fontSize: '0.8125rem' }}>🎓 Student</Link>
-              <Link to="/admin/login" className="btn btn-secondary" style={{ textDecoration: 'none', width: '100%', justifyContent: 'center', fontSize: '0.8125rem' }}>👨‍🏫 Faculty</Link>
-              <Link to="/admin/login" className="btn btn-primary" style={{ textDecoration: 'none', width: '100%', justifyContent: 'center', fontSize: '0.8125rem' }}>🛡️ Admin / Super Admin</Link>
+              <div style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--color-slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Select your role</div>
+              <Link to="/auth/student/login" className="btn btn-secondary" style={{ textDecoration: 'none', width: '100%', justifyContent: 'center', fontSize: '0.8125rem' }}>Student</Link>
+              <Link to="/faculty/login" className="btn btn-secondary" style={{ textDecoration: 'none', width: '100%', justifyContent: 'center', fontSize: '0.8125rem' }}>Faculty</Link>
+              <Link to="/admin/login" className="btn btn-secondary" style={{ textDecoration: 'none', width: '100%', justifyContent: 'center', fontSize: '0.8125rem' }}>Admin</Link>
+              <Link to="/super-admin/login" className="btn btn-primary" style={{ textDecoration: 'none', width: '100%', justifyContent: 'center', fontSize: '0.8125rem' }}>Super Admin</Link>
             </li>
           ) : (
             <li className="mobile-nav-auth">

@@ -57,11 +57,12 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
-// Admin Account Management - List Admins
+// Admin Account Management - List Admins (+ all non-student staff)
 router.get('/admins', async (req, res) => {
   try {
+    const includeAll = req.query.includeAll === 'true';
     const adminUsers = (await db.users.find())
-      .filter(u => u.role === 'admin' || u.role === 'super_admin');
+      .filter(u => includeAll || u.role === 'admin' || u.role === 'super_admin' || u.role === 'faculty');
 
     // Attach current active workload count
     const adminsWithWorkload = await Promise.all(adminUsers.map(async ({ password, ...user }) => {
@@ -124,6 +125,37 @@ router.post('/admins', async (req, res) => {
   } catch (err) {
     console.error('Create admin error:', err);
     res.status(500).json({ success: false, message: 'Failed to create admin account.' });
+  }
+});
+
+// Promote / Demote Role (faculty ↔ admin)
+router.put('/admins/:id/role', async (req, res) => {
+  try {
+    const { role } = req.body;
+    const allowedRoles = ['admin', 'faculty', 'super_admin', 'student'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ success: false, message: `Role must be one of: ${allowedRoles.join(', ')}` });
+    }
+
+    const targetUser = await db.users.findById(req.params.id);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    if (targetUser.id === req.user.id) {
+      return res.status(400).json({ success: false, message: 'Cannot change your own role.' });
+    }
+
+    const oldRole = targetUser.role;
+    await db.users.updateOne(targetUser.id, { role });
+
+    const roleLabels = { student: 'Student', faculty: 'Faculty', admin: 'Admin', super_admin: 'Super Admin' };
+    logAuditAction(req, 'USER_ROLE_CHANGED', 'USER', targetUser.id,
+      `Changed role of ${targetUser.name} from ${roleLabels[oldRole]} to ${roleLabels[role]}`);
+
+    res.json({ success: true, message: `${targetUser.name} is now ${roleLabels[role]}.` });
+  } catch (err) {
+    console.error('Role change error:', err);
+    res.status(500).json({ success: false, message: 'Failed to change user role.' });
   }
 });
 
@@ -339,6 +371,59 @@ router.get('/workload', async (req, res) => {
   } catch (err) {
     console.error('Workload analytics error:', err);
     res.status(500).json({ success: false, message: 'Failed to load workload analytics.' });
+  }
+});
+
+// ─── System Announcements ──────────────────────────────────────────────────
+
+router.get('/announcements', async (req, res) => {
+  try {
+    const collection = db.announcements;
+    if (!collection) return res.json({ success: true, announcements: [] });
+    const announcements = (await collection.find()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json({ success: true, announcements });
+  } catch (err) {
+    res.json({ success: true, announcements: [] });
+  }
+});
+
+router.post('/announcements', async (req, res) => {
+  try {
+    const { title, message, targetRoles, priority } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ success: false, message: 'Title and message are required.' });
+    }
+    const collection = db.announcements;
+    if (!collection) return res.status(500).json({ success: false, message: 'Announcements not available.' });
+
+    const announcement = await collection.insertOne({
+      title: String(title).trim(),
+      message: String(message).trim(),
+      targetRoles: targetRoles || ['student', 'faculty', 'admin', 'super_admin'],
+      priority: priority || 'normal',
+      authorId: req.user.id,
+      authorName: req.user.name,
+      isActive: true,
+      createdAt: new Date().toISOString()
+    });
+
+    logAuditAction(req, 'ANNOUNCEMENT_CREATED', 'SYSTEM', announcement.id, `Announcement: ${title}`);
+
+    res.status(201).json({ success: true, message: 'Announcement published.', announcement });
+  } catch (err) {
+    console.error('Create announcement error:', err);
+    res.status(500).json({ success: false, message: 'Failed to create announcement.' });
+  }
+});
+
+router.delete('/announcements/:id', async (req, res) => {
+  try {
+    const collection = db.announcements;
+    if (!collection) return res.status(500).json({ success: false, message: 'Announcements not available.' });
+    await collection.deleteOne(req.params.id);
+    res.json({ success: true, message: 'Announcement removed.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to delete announcement.' });
   }
 });
 

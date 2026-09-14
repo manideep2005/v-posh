@@ -13,6 +13,7 @@ const notificationRoutes = require('./routes/notifications');
 const uploadRoutes = require('./routes/uploads');
 const awarenessRoutes = require('./routes/awareness');
 const attachmentRoutes = require('./routes/attachments');
+const pdfRoutes = require('./routes/pdf');
 
 // ---------------------------------------------------------------------------
 // The Express application. Imported by server/index.js (long-running node
@@ -67,6 +68,7 @@ function createApp() {
   app.use('/api/uploads', uploadRoutes);
   app.use('/api/attachments', attachmentRoutes);
   app.use('/api/awareness', awarenessRoutes);
+  app.use('/api/pdf', pdfRoutes);
 
   // Health check
   app.get('/api/health', (req, res) => {

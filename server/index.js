@@ -23,6 +23,13 @@ const app = createApp();
     console.log(`Storage: ${db.getEngineName()}`);
     console.log(`=======================================================`);
   });
+
+  // SLA auto-escalation: check every hour for breached SLAs
+  const { checkAndEscalate } = require('./services/sla');
+  setInterval(() => {
+    checkAndEscalate().catch(err => console.error('[SLA] Cron error:', err.message));
+  }, 60 * 60 * 1000); // every hour
+  console.log('[SLA] Auto-escalation cron started (every 60 minutes)');
 })();
 
 // Graceful shutdown

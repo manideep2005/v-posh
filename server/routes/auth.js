@@ -278,19 +278,22 @@ router.post('/google', authLimiter, async (req, res) => {
     const { email, name, picture, sub: googleId } = payload;
     const normalizedEmail = (email || '').toLowerCase().trim();
 
-    // Enforce college domains: students = @vitapstudent.ac.in, faculty = @vitap.ac.in
+    // Whitelisted emails bypass domain restrictions
+    const isWhitelisted = config.WHITELIST_EMAILS.includes(normalizedEmail);
+
+    // Enforce college domains (skip for whitelisted emails)
     const studentDomains = config.ALLOWED_STUDENT_DOMAINS;
     const facultyDomains = config.ALLOWED_FACULTY_DOMAINS;
     const allAllowedDomains = [...studentDomains, ...facultyDomains];
     const emailDomain = normalizedEmail.split('@')[1];
-    if (!allAllowedDomains.includes(emailDomain)) {
+    if (!isWhitelisted && !allAllowedDomains.includes(emailDomain)) {
       return res.status(403).json({
         success: false,
         message: `Only @${studentDomains.join(', @')} (students) and @${facultyDomains.join(', @')} (faculty) accounts are allowed.`
       });
     }
 
-    // Determine role from domain: @vitapstudent.ac.in → student, @vitap.ac.in → faculty
+    // Determine role from domain (whitelisted emails with existing accounts keep their role)
     const autoRole = studentDomains.includes(emailDomain) ? 'student' : 'faculty';
 
     // Check if account is disabled
@@ -376,19 +379,22 @@ router.post('/google-access', authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Could not retrieve email from Google account.' });
     }
 
-    // Enforce college domains: students = @vitapstudent.ac.in, faculty = @vitap.ac.in
+    // Whitelisted emails bypass domain restrictions
+    const isWhitelisted = config.WHITELIST_EMAILS.includes(normalizedEmail);
+
+    // Enforce college domains (skip for whitelisted emails)
     const studentDomains = config.ALLOWED_STUDENT_DOMAINS;
     const facultyDomains = config.ALLOWED_FACULTY_DOMAINS;
     const allAllowedDomains = [...studentDomains, ...facultyDomains];
     const emailDomain = normalizedEmail.split('@')[1];
-    if (!allAllowedDomains.includes(emailDomain)) {
+    if (!isWhitelisted && !allAllowedDomains.includes(emailDomain)) {
       return res.status(403).json({
         success: false,
         message: `Only @${studentDomains.join(', @')} (students) and @${facultyDomains.join(', @')} (faculty) accounts are allowed.`
       });
     }
 
-    // Determine role from domain
+    // Determine role from domain (whitelisted emails with existing accounts keep their role)
     const autoRole = studentDomains.includes(emailDomain) ? 'student' : 'faculty';
 
     // Check existing user
@@ -519,14 +525,20 @@ router.post('/kratosid/verify', authLimiter, async (req, res) => {
 
     // Approved — issue JWT
     if (!user) {
-      // Auto-provision new account
+      // Auto-detect role from domain
+      const studentDomains = config.ALLOWED_STUDENT_DOMAINS;
+      const facultyDomains = config.ALLOWED_FACULTY_DOMAINS;
+      const emailDomain = normalizedEmail.split('@')[1];
+      const autoRole = studentDomains.includes(emailDomain) ? 'student' : facultyDomains.includes(emailDomain) ? 'faculty' : 'student';
       const localPart = normalizedEmail.split('@')[0];
+
       user = await db.users.insertOne({
         name: localPart,
         email: normalizedEmail,
         password: null,
-        role: 'student',
-        studentId: '',
+        role: autoRole,
+        studentId: autoRole === 'student' ? localPart.toUpperCase() : '',
+        employeeId: autoRole === 'faculty' ? localPart.toUpperCase() : '',
         department: '',
         year: '',
         phone: '',
@@ -534,8 +546,8 @@ router.post('/kratosid/verify', authLimiter, async (req, res) => {
         status: 'active',
         lastActiveAt: new Date().toISOString()
       });
-      logAuditAction(req, 'STUDENT_REGISTERED_KRATOSID', 'USER', user.id,
-        `Student auto-registered via KratosID: ${user.email}`);
+      logAuditAction(req, autoRole === 'student' ? 'STUDENT_REGISTERED_KRATOSID' : 'FACULTY_REGISTERED_KRATOSID', 'USER', user.id,
+        `${autoRole} auto-registered via KratosID: ${user.email}`);
     } else {
       await db.users.updateOne(user.id, { lastActiveAt: new Date().toISOString() });
       logAuditAction(req, 'USER_LOGIN_KRATOSID', 'USER', user.id,
@@ -644,6 +656,50 @@ router.post('/kratosid/qr/poll', authLimiter, async (req, res) => {
   } catch (err) {
     console.error('QR poll error:', err);
     res.status(500).json({ success: false, message: 'Server error during QR login.' });
+  }
+});
+
+// ─── Profile Picture Upload ──────────────────────────────────────────────────
+const multer = require('multer');
+const profileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only JPEG, PNG, and WebP images are allowed for profile pictures.'));
+  }
+});
+
+router.post('/profile-picture', authenticateToken, profileUpload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No image file provided.' });
+
+    const { GridFSBucket } = require('mongodb');
+    const crypto = require('crypto');
+    const pathMod = require('path');
+    let avatarUrl = '';
+
+    if (db.getEngineName() === 'mongodb' && db.getMongoDb()) {
+      const bucket = new GridFSBucket(db.getMongoDb(), { bucketName: 'avatars' });
+      const storedName = `avatar-${req.user.id}-${Date.now()}${pathMod.extname(req.file.originalname)}`;
+      await new Promise((resolve, reject) => {
+        const stream = bucket.openUploadStream(storedName, { contentType: req.file.mimetype });
+        stream.on('error', reject);
+        stream.on('finish', () => { avatarUrl = `/api/auth/avatar/${stream.id}`; resolve(); });
+        stream.end(req.file.buffer);
+      });
+    } else {
+      // Fallback: store as base64 data URL
+      avatarUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    }
+
+    await db.users.updateOne(req.user.id, { avatar: avatarUrl });
+    logAuditAction(req, 'PROFILE_PICTURE_UPDATED', 'USER', req.user.id, 'Profile picture updated');
+
+    res.json({ success: true, message: 'Profile picture updated.', avatar: avatarUrl });
+  } catch (err) {
+    console.error('Profile picture upload error:', err);
+    res.status(500).json({ success: false, message: 'Failed to upload profile picture.' });
   }
 });
 

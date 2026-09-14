@@ -61,6 +61,9 @@ export default function Footer() {
           <div>
             © {new Date().getFullYear()} VIT-AP University. All rights reserved. V-POSH Grievance Portal v2026.1
           </div>
+          <div style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--color-slate-500)' }}>
+            Developed by <strong style={{ color: 'var(--color-emerald-500)' }}>Manideep Gonugunta</strong> — Center of Excellence (AIR)
+          </div>
           <div>
             Strict Confidentiality • Statutory POSH Act Compliance • Zero Tolerance Policy
           </div>

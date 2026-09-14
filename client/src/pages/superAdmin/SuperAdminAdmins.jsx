@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch, formatDate } from '../../utils/api';
-import { UserPlus, UserCheck, UserX, Shield, KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { UserPlus, UserCheck, UserX, Shield, KeyRound, AlertCircle, CheckCircle2, ArrowUp, ArrowDown } from 'lucide-react';
 
 export default function SuperAdminAdmins() {
   const [admins, setAdmins] = useState([]);
@@ -25,7 +25,7 @@ export default function SuperAdminAdmins() {
 
   const fetchAdmins = async () => {
     try {
-      const res = await apiFetch('/super-admin/admins');
+      const res = await apiFetch('/super-admin/admins?includeAll=true');
       if (res.success) {
         setAdmins(res.admins);
       }
@@ -65,6 +65,20 @@ export default function SuperAdminAdmins() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleRoleChange = async (userId, newRole, userName) => {
+    const roleLabels = { student: 'Student', faculty: 'Faculty', admin: 'Admin', super_admin: 'Super Admin' };
+    if (!confirm(`Change ${userName}'s role to ${roleLabels[newRole]}?`)) return;
+    try {
+      const res = await apiFetch(`/super-admin/admins/${userId}/role`, {
+        method: 'PUT', body: JSON.stringify({ role: newRole })
+      });
+      if (res.success) {
+        setMsg(res.message);
+        fetchAdmins();
+      }
+    } catch (e) { alert(e.message || 'Role change failed.'); }
   };
 
   const handleToggleStatus = async (adminId, currentStatus) => {
@@ -132,13 +146,15 @@ export default function SuperAdminAdmins() {
                     <td>{adm.email}</td>
                     <td>{adm.department}</td>
                     <td>
-                      <span className="role-badge" style={{ backgroundColor: adm.role === 'super_admin' ? 'var(--color-emerald-700)' : 'var(--color-navy-700)' }}>
+                      <span className="role-badge" style={{
+                        backgroundColor: adm.role === 'super_admin' ? 'var(--color-emerald-700)' : adm.role === 'admin' ? 'var(--color-navy-700)' : adm.role === 'faculty' ? '#3B82F6' : '#6366F1'
+                      }}>
                         {adm.role}
                       </span>
                     </td>
                     <td>
                       <span className="badge badge-submitted">
-                        {adm.activeWorkload || 0} Active Case(s)
+                        {adm.activeWorkload || 0} Active
                       </span>
                     </td>
                     <td>
@@ -147,14 +163,29 @@ export default function SuperAdminAdmins() {
                       </span>
                     </td>
                     <td>
-                      {adm.role !== 'super_admin' && (
-                        <button
-                          onClick={() => handleToggleStatus(adm.id, adm.status)}
-                          className={`btn ${adm.status === 'active' ? 'btn-danger' : 'btn-emerald'} btn-sm`}
-                        >
-                          {adm.status === 'active' ? <UserX size={13} /> : <UserCheck size={13} />}
-                          {adm.status === 'active' ? 'Disable' : 'Enable'}
-                        </button>
+                      {adm.role !== 'super_admin' ? (
+                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <select
+                            value=""
+                            onChange={(e) => { if (e.target.value) handleRoleChange(adm.id, e.target.value, adm.name); e.target.value = ''; }}
+                            style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-slate-300)', fontFamily: 'inherit', background: '#fff', cursor: 'pointer' }}
+                          >
+                            <option value="" disabled>Change role…</option>
+                            {adm.role !== 'student' && <option value="student">↓ Student</option>}
+                            {adm.role !== 'faculty' && <option value="faculty">→ Faculty</option>}
+                            {adm.role !== 'admin' && <option value="admin">↑ Admin</option>}
+                            {adm.role !== 'super_admin' && <option value="super_admin">⭐ Super Admin</option>}
+                          </select>
+                          <button
+                            onClick={() => handleToggleStatus(adm.id, adm.status)}
+                            className={`btn ${adm.status === 'active' ? 'btn-danger' : 'btn-emerald'} btn-sm`}
+                            title={adm.status === 'active' ? 'Disable' : 'Enable'}
+                          >
+                            {adm.status === 'active' ? <UserX size={13} /> : <UserCheck size={13} />}
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-slate-400)' }}>Owner</span>
                       )}
                     </td>
                   </tr>

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../utils/api';
-import { User, CheckCircle2, AlertCircle } from 'lucide-react';
+import { User, CheckCircle2, AlertCircle, Camera } from 'lucide-react';
 
 export default function StudentProfile() {
   const { user, checkCurrentSession } = useAuth();
@@ -38,12 +38,50 @@ export default function StudentProfile() {
     }
   };
 
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const body = new FormData();
+    body.append('avatar', file);
+    try {
+      const res = await apiFetch('/auth/profile-picture', { method: 'POST', body });
+      if (res.success) {
+        setMsg('Profile picture updated.');
+        checkCurrentSession();
+      }
+    } catch (err) { alert(err.message || 'Upload failed.'); }
+  };
+
+  const getInitials = (name) => (name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
   return (
     <div className="container" style={{ padding: '3rem 1.5rem', maxWidth: '600px' }}>
       <div className="panel">
+        {/* Profile Header with Avatar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', padding: '1.5rem', borderBottom: '1px solid var(--color-slate-200)', marginBottom: '1.5rem' }}>
+          <div style={{ position: 'relative' }}>
+            {user?.avatar ? (
+              <img src={user.avatar} alt="Profile" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--color-emerald-400)' }} />
+            ) : (
+              <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, var(--color-emerald-500), var(--color-emerald-700))', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: '700', border: '3px solid var(--color-emerald-200)' }}>
+                {getInitials(user?.name)}
+              </div>
+            )}
+            <label style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--color-navy-900)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '2px solid #fff', transition: 'transform 0.15s' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+              <Camera size={13} />
+              <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
+            </label>
+          </div>
+          <div>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--color-navy-900)', margin: 0 }}>{user?.name || 'Student'}</h2>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-slate-500)', margin: '0.15rem 0 0' }}>{user?.email}</p>
+            <span className="role-badge" style={{ marginTop: '0.35rem', display: 'inline-block' }}>{user?.role}</span>
+          </div>
+        </div>
+
         <div className="panel-header">
           <h1 className="panel-title">
-            <User size={20} /> Student Profile & Institutional Details
+            <User size={20} /> Profile Details
           </h1>
         </div>
 

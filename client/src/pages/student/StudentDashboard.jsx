@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { apiFetch, formatDate } from '../../utils/api';
 import StatusBadge from '../../components/StatusBadge';
 import { FilePlus, FileText, Clock, CheckCircle2, Shield, AlertTriangle, ArrowRight, Bell, TrendingUp, Sparkles, Settings } from 'lucide-react';
+import Announcements from '../../components/Announcements';
 
 // ─── Greeting helper ────────────────────────────────────────────────────────
 function getGreeting() {
@@ -63,7 +64,10 @@ function StatusTimeline({ status }) {
   );
 }
 
+import { useAuth } from '../../context/AuthContext';
+
 export default function StudentDashboard() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -89,34 +93,23 @@ export default function StudentDashboard() {
 
   return (
     <div className="container" style={{ padding: '2.5rem 1.5rem' }}>
-      {/* ─── Greeting Banner ─── */}
-      <div style={{
-        background: `linear-gradient(135deg, var(--color-navy-900) 0%, #1E3A5F 100%)`,
-        borderRadius: 'var(--radius-md, 12px)', padding: '1.75rem 2rem', marginBottom: '2rem',
-        color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem',
-        position: 'relative', overflow: 'hidden',
-      }}>
-        {/* Decorative circles */}
-        <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(94, 234, 212, 0.1)' }} />
-        <div style={{ position: 'absolute', bottom: -40, right: 80, width: 80, height: 80, borderRadius: '50%', background: 'rgba(94, 234, 212, 0.07)' }} />
-
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <h1 style={{ fontSize: '1.625rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {greeting.emoji} {greeting.text}! <Sparkles size={22} style={{ color: greeting.color }} />
+      {/* ─── Greeting ─── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--color-navy-900)' }}>
+            {greeting.emoji} {greeting.text}, {user?.name || 'Student'}!
           </h1>
-          <p style={{ color: '#94A3B8', fontSize: '0.875rem', marginTop: '0.35rem' }}>
+          <p style={{ color: 'var(--color-slate-500)', fontSize: '0.875rem', marginTop: '0.2rem' }}>
             Here's what's happening with your complaints today
           </p>
         </div>
-        <Link to="/student/complaints/new" style={{
-          display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem',
-          background: 'var(--color-emerald-600)', color: '#fff', borderRadius: 'var(--radius-sm)',
-          textDecoration: 'none', fontWeight: '600', fontSize: '0.875rem',
-          boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)', transition: 'transform 0.15s',
-        }}>
+        <Link to="/student/complaints/new" className="btn btn-emerald">
           <FilePlus size={16} /> Raise Complaint
         </Link>
       </div>
+
+      {/* ─── Announcements ─── */}
+      <Announcements />
 
       {/* ─── Stats Grid ─── */}
       <div className="stats-grid" style={{ marginBottom: '2rem' }}>

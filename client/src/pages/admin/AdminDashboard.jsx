@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { apiFetch, formatDate } from '../../utils/api';
 import StatusBadge from '../../components/StatusBadge';
 import { AlertCircle, Clock, CheckCircle2, FileSearch, ShieldAlert, Users, ArrowRight } from 'lucide-react';
+import Announcements from '../../components/Announcements';
 
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
@@ -47,6 +48,9 @@ export default function AdminDashboard() {
           Open Case Repository <ArrowRight size={16} />
         </Link>
       </div>
+
+      {/* Announcements */}
+      <Announcements />
 
       {/* Operational Metric Grid */}
       <div className="stats-grid">

@@ -14,6 +14,8 @@ module.exports = {
   // Students: @vitapstudent.ac.in  |  Faculty: @vitap.ac.in
   ALLOWED_STUDENT_DOMAINS: (process.env.ALLOWED_STUDENT_DOMAINS || 'vitapstudent.ac.in').split(',').map(d => d.trim().toLowerCase()),
   ALLOWED_FACULTY_DOMAINS: (process.env.ALLOWED_FACULTY_DOMAINS || 'vitap.ac.in').split(',').map(d => d.trim().toLowerCase()),
+  // Emails that bypass domain role restrictions (can have any role)
+  WHITELIST_EMAILS: (process.env.WHITELIST_EMAILS || 'mani.23mis7006@vitapstudent.ac.in').split(',').map(e => e.trim().toLowerCase()),
   // KratosID passwordless auth
   KRATOSID_API_KEY: process.env.KRATOSID_API_KEY || '',
   KRATOSID_PRODUCT_ID: process.env.KRATOSID_PRODUCT_ID || '',
