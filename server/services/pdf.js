@@ -179,7 +179,8 @@ async function generateAcknowledgement(complaint, user) {
   y = d.doc.y + 12;
 
   // QR
-  y = d.gap(100);
+  if (!addSectionToPage(d, y, 90)) { y = d.newPage(); }
+  y = d.gap(d.M + 40);
   const qr = await qrBuf(`https://vposh.vitap.ac.in/verify/${d.docId}?token=${d.verifyToken}`);
   if (qr) {
     d.doc.image(qr, d.M + (d.cw - 60) / 2, y, { width: 60, height: 60 });
@@ -283,8 +284,16 @@ async function generateStatusReport(complaint, user, history = [], updates = [])
     }
   }
 
+  // ICC Procedure & Rules & Regulations
+  y = d.gap(40);
+  if (y > d.H - 120) { y = d.newPage(); }
+  y = d.secTitle('ICC PROCEDURE & RULES & REGULATIONS', y);
+  y = renderRulesBlock(d, y, complaint);
+
   // Confidentiality
-  y = d.gap(70); y = d.secTitle('CONFIDENTIALITY NOTICE', y);
+  if (!addSectionToPage(d, y, 70)) { y = d.newPage(); }
+  y = d.gap(d.M + 40);
+  y = d.secTitle('CONFIDENTIALITY NOTICE', y);
   d.doc.save().rect(d.M, y, d.cw, 42).fill(COLORS.slateBg).restore();
   d.doc.font(F.bold).fontSize(8).fillColor(COLORS.red).text('CONFIDENTIAL DOCUMENT', d.M + 10, y + 8, { width: d.cw - 20, lineBreak: false });
   d.doc.font(F.regular).fontSize(7.5).fillColor(COLORS.slate).text(
@@ -294,16 +303,18 @@ async function generateStatusReport(complaint, user, history = [], updates = [])
   y = d.doc.y + 12;
 
   // QR
-  y = d.gap(100);
+  if (!addSectionToPage(d, y, 90)) { y = d.newPage(); }
+  y = d.gap(d.M + 40);
   const qr = await qrBuf(`https://vposh.vitap.ac.in/verify/${d.docId}?token=${d.verifyToken}`);
   if (qr) {
     d.doc.image(qr, d.M + (d.cw - 60) / 2, y, { width: 60, height: 60 });
     d.doc.font(F.bold).fontSize(7).fillColor(COLORS.navy).text('Document Verification', d.M, y + 65, { width: d.cw, align: 'center', lineBreak: false });
     d.doc.font(F.regular).fontSize(6.5).fillColor(COLORS.slateLight).text(d.docId, d.M, y + 76, { width: d.cw, align: 'center', lineBreak: false });
+    y = d.doc.y + 10;
   }
 
   // Contact
-  y = d.gap(60) + 10;
+  if (!addSectionToPage(d, y, 28)) { y = d.newPage(); }
   d.doc.font(F.bold).fontSize(8).fillColor(COLORS.navy).text('V-POSH * VIT-AP University', d.M, y, { width: d.cw, align: 'center', lineBreak: false });
   d.doc.font(F.regular).fontSize(7).fillColor(COLORS.slate)
     .text('Email: vposh@vitap.ac.in  |  Helpline: +91 863-2377777 / 1800-112-9900', d.M, y + 12, { width: d.cw, align: 'center', lineBreak: false });
@@ -313,6 +324,132 @@ async function generateStatusReport(complaint, user, history = [], updates = [])
 }
 
 // ─── Document Store ──────────────────────────────────────────────────────────
+function addSectionToPage(d, y, needed) {
+  // Returns true when the remaining vertical space on the current page is
+  // enough for a section of at least `needed` pts. Callers use this to
+  // decide whether to start a fresh page so section headers are never
+  // orphaned at the bottom of a page.
+  return y + needed <= d.H - d.M - 20;
+}
+
+function renderRulesBlock(d, y, complaint) {
+  const rules = [
+    {
+      heading: 'How This Complaint Was Received',
+      body: [
+        'This complaint was submitted through the V-POSH platform of VIT-AP University, the institutional grievance portal constituted to receive and redress complaints of sexual harassment in accordance with the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013 (the \"POSH Act\") and the rules made thereunder.',
+        'On submission, the complaint was time-stamped and assigned a unique reference ID for statutory tracking. The Internal Complaints Committee (ICC) is required to acknowledge receipt of the complaint within seven (7) working days and to commence preliminary scrutiny and, where appropriate, formal inquiry proceedings.',
+      ],
+    },
+    {
+      heading: 'Confidentiality & Privacy',
+      body: [
+        'All disclosures, identity markers, and evidence relating to this complaint remain strictly confidential. Access is restricted solely to the members of the ICC entrusted with the inquiry and to such other persons as may be required for the limited purpose of conducting the inquiry or implementing any recommendation.',
+        'The identity of the complainant and of any witness shall not be disclosed to the respondent or to any other person except to the extent strictly necessary for the conduct of the inquiry, and only through the ICC.',
+      ],
+    },
+    {
+      heading: 'Interim Relief',
+      body: [
+        'Pending the completion of the inquiry, the ICC may, at the request of the complainant or on its own motion, recommend interim measures including, without limitation, transfer of the complainant or the respondent to any other workplace, department, or academic unit, or the grant of leave to the aggrieved woman up to a period of three months, or such other relief as may be appropriate under the circumstances.',
+        'No such interim measure shall be construed as a presumption of guilt, nor shall it be used to penalise either party.',
+      ],
+    },
+    {
+      heading: 'Inquiry & Timeline',
+      body: [
+        'Upon acknowledgment, the ICC conducts a preliminary assessment of the complaint. If the complaint discloses a prima facie case of sexual harassment, the ICC proceeds to a formal inquiry. The inquiry is to be completed within ninety (90) days of its commencement, or within such extended period as the ICC may determine on recording reasons.',
+        'The ICC shall provide the complainant and the respondent a fair and reasonable opportunity to be heard and to present evidence and witnesses. The inquiry shall be conducted in a manner that respects the dignity and privacy of the complainant.',
+      ],
+    },
+    {
+      heading: 'Action on Conclusion of Inquiry',
+      body: [
+        'If the ICC concludes that sexual harassment has been committed, it shall recommend to the employer/institution the action that is necessary and appropriate, which may include disciplinary action, deduction of salary, mandatory counselling, or such other measures as may be warranted.',
+        'The ICC may also recommend that the respondent be liable to pay such compensation as may be determined, and that action be taken under the applicable service rules or institutional regulations.',
+        'The report of the ICC and its recommendations are forwarded to the competent authority for action within sixty (60) days of the conclusion of the inquiry.',
+      ],
+    },
+    {
+      heading: 'Prohibition of Victimization',
+      body: [
+        'No person shall be subjected to any kind of victimization or unfair treatment by the employer or by any other person in connection with the making of a complaint under the POSH Act or in the course of an inquiry.',
+        'Any act of victimization, retaliation, or intimidation against the complainant or any witness is itself a violation and shall be dealt with as a separate grievance under the same procedures.',
+      ],
+    },
+    {
+      heading: 'False or Malicious Complaints',
+        body: [
+        'Where the ICC concludes that the allegation of sexual harassment has not been proved, no action shall be taken against the complainant. However, if the inquiry establishes that the complaint was malicious, was knowingly false, or was made with the intent to defame or to humiliate, the ICC may recommend action against the complainant in accordance with applicable service rules or institutional policy.',
+        'An action to counter a malicious or knowingly false complaint does not, by itself, discourage or deter genuine complaints made in good faith.',
+      ],
+    },
+  ];
+
+  const ruleH = 9;
+  const ruleGap = 6;
+  const ruleTextGap = 4;
+  const left = d.M;
+  const width = d.cw;
+
+  for (const rule of rules) {
+    // Determine whether the heading itself fits on the current page.
+    if (y + ruleH + 2 > d.H - d.M - 20) {
+      y = d.newPage();
+    }
+    d.doc.font(F.bold).fontSize(ruleH).fillColor(COLORS.teal)
+      .text(rule.heading.toUpperCase(), left, y, { width });
+    y = d.doc.y + ruleGap;
+    if (y > d.H - d.M - 20) { y = d.newPage(); }
+    for (const para of rule.body) {
+      const lines = wordWrap(d, para, width);
+      if (lines.length === 0) continue;
+      // If the first line won't fit, push to next page.
+      if (y + 8 * lines.length + 6 > d.H - d.M - 20) {
+        y = d.newPage();
+      }
+      d.doc.font(F.regular).fontSize(8.5).fillColor(COLORS.navyLight)
+        .text(para, left, y, { width, lineGap: 2.5 });
+      y = d.doc.y + ruleTextGap;
+    }
+    d.doc.save().moveTo(left, y).lineTo(left + width, y)
+      .lineWidth(0.4).strokeColor(COLORS.slateMuted).stroke();
+    y += 10;
+  }
+  return d.doc.y;
+}
+
+function wordWrap(d, text, width) {
+  // Return an array of lines by splitting on explicit newlines and wrapping
+  // long runs to the available width using pdfkit's measurement.
+  const out = [];
+  const fn = d.doc.font(F.regular).fontSize(8.5);
+  for (const chunk of text.split('\n')) {
+    let remainder = chunk;
+    while (remainder.length) {
+      if (d.doc.widthOfString(remainder) <= width) {
+        out.push(remainder);
+        break;
+      }
+      // Find a safe split point before width is exceeded.
+      let cut = Math.floor(remainder.length / 2);
+      let lo = 0, hi = remainder.length;
+      for (let i = 0; i < 60 && lo < hi; i++) {
+        cut = Math.floor((lo + hi) / 2);
+        const candidate = remainder.slice(0, cut + 1).replace(/\s\S*$/, '');
+        if (!candidate || d.doc.widthOfString(candidate) > width) hi = cut;
+        else lo = Math.max(cut, candidate.length);
+      }
+      const safe = remainder.slice(0, Math.max(lo, 1));
+      out.push(safe || remainder.slice(0, 15));
+      remainder = remainder.slice(Math.max(lo, 1)).trimStart();
+      if (!remainder && safe) break;
+    }
+    if (!remainder && out[out.length - 1] === chunk) break;
+  }
+  return out;
+}
+
 const store = new Map();
 function storeDocument(id, data) { store.set(id, { ...data, createdAt: new Date().toISOString(), status: 'active' }); }
 function getDocument(id) { return store.get(id) || null; }

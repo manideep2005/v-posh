@@ -148,4 +148,36 @@ router.get('/verify/:docId', async (req, res) => {
   }
 });
 
+// ─── Public Complaint Verification (scannable QR target) ──────────────────────
+router.get('/case/:refId', async (req, res) => {
+  try {
+    const complaint = await db.complaints.findOne(c => c.referenceId === req.params.refId);
+    if (!complaint) {
+      return res.json({ verified: false, message: 'Complaint not found in V-POSH system.' });
+    }
+
+    // Public-safe info only — no description, no respondent details, no student identity
+    res.json({
+      verified: true,
+      complaint: {
+        referenceId: complaint.referenceId,
+        category: complaint.category,
+        priority: complaint.priority,
+        status: complaint.status,
+        submittedOn: complaint.createdAt,
+        title: complaint.title,
+      },
+      platform: {
+        name: 'V-POSH',
+        fullName: 'VIT-AP POSH Awareness & Complaint Management Platform',
+        university: 'VIT-AP University',
+        email: 'vposh@vitap.ac.in',
+        helpline: '+91 863-2377777 / 1800-112-9900',
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ verified: false, message: 'Verification failed.' });
+  }
+});
+
 module.exports = router;

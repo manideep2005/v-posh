@@ -27,7 +27,7 @@ export default function StudentLogin() {
   const pollRef = useRef(null);
   const countdownRef = useRef(null);
 
-  const { kratosLogin, startQrLogin, pollQrLogin } = useAuth();
+  const { kratosLogin, startPushLogin, pollPushLogin, startQrLogin, pollQrLogin } = useAuth();
   const navigate = useNavigate();
 
   // Cleanup on unmount
@@ -38,21 +38,44 @@ export default function StudentLogin() {
     };
   }, []);
 
-  // ── KratosID push auth ────────────────────────────────────
+  // ── KratosID push auth (client-side polling) ──────────────
   const handleKratosLogin = async (e) => {
     e.preventDefault();
     if (!kratosEmail) return;
     setError('');
     setKratosState('waiting');
     try {
-      const user = await kratosLogin(kratosEmail);
-      if (user.role === 'faculty') navigate('/faculty/dashboard');
-      else if (user.role === 'admin') navigate('/admin/dashboard');
-      else if (user.role === 'super_admin') navigate('/super-admin/dashboard');
-      else navigate('/student/dashboard');
+      const startRes = await startPushLogin(kratosEmail);
+      const pushToken = startRes.token;
+      // Poll from client side every 2s (like QR flow)
+      let attempts = 0;
+      const maxAttempts = 45; // 90 seconds max
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          clearInterval(pollRef.current);
+          setKratosState('idle');
+          setError('Push authentication timed out. Please try again.');
+          return;
+        }
+        try {
+          const user = await pollPushLogin(pushToken);
+          if (user) {
+            clearInterval(pollRef.current);
+            if (user.role === 'faculty') navigate('/faculty/dashboard');
+            else if (user.role === 'admin') navigate('/admin/dashboard');
+            else if (user.role === 'super_admin') navigate('/super-admin/dashboard');
+            else navigate('/student/dashboard');
+          }
+        } catch (err) {
+          clearInterval(pollRef.current);
+          setKratosState('idle');
+          setError(err.message || 'Push authentication failed.');
+        }
+      }, 2000);
     } catch (err) {
       setKratosState('idle');
-      setError(err.message || 'KratosID authentication failed.');
+      setError(err.message || 'Failed to send push notification.');
     }
   };
 

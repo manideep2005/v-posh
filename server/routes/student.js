@@ -246,9 +246,24 @@ router.get('/complaints-sla', async (req, res) => {
   }
 });
 
-// ─── Pause Complaint ─────────────────────────────────────────────────────────
+// ─── Pause Complaint (with reason + email confirmation security check) ─────────
 router.put('/complaints/:id/pause', async (req, res) => {
   try {
+    const { reason, email } = req.body;
+    if (!reason || reason.trim().length < 10) {
+      return res.status(400).json({ success: false, message: 'A reason (minimum 10 characters) is required to pause a complaint.' });
+    }
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email confirmation is required.' });
+    }
+
+    // Verify email matches the logged-in user's email
+    const fullUser = await db.users.findById(req.user.id);
+    if (!fullUser) return res.status(401).json({ success: false, message: 'User not found.' });
+    if (email.toLowerCase().trim() !== fullUser.email.toLowerCase()) {
+      return res.status(401).json({ success: false, message: 'Email does not match your registered email. Please try again.' });
+    }
+
     const complaint = await db.complaints.findOne(c => c.id === req.params.id || c.referenceId === req.params.id);
     if (!complaint) return res.status(404).json({ success: false, message: 'Complaint not found.' });
     if (complaint.userId !== req.user.id) return res.status(403).json({ success: false, message: 'Forbidden.' });
@@ -264,11 +279,11 @@ router.put('/complaints/:id/pause', async (req, res) => {
       changedById: req.user.id,
       changedByName: req.user.name,
       changedByRole: 'student',
-      comment: newPaused ? 'Complaint paused by student' : 'Complaint resumed by student'
+      comment: `${newPaused ? 'Paused' : 'Resumed'} by student. Reason: ${reason.trim()}`
     });
 
     logAuditAction(req, newPaused ? 'COMPLAINT_PAUSED' : 'COMPLAINT_RESUMED', 'COMPLAINT', complaint.id,
-      `${newPaused ? 'Paused' : 'Resumed'} complaint ${complaint.referenceId}`);
+      `${newPaused ? 'Paused' : 'Resumed'} complaint ${complaint.referenceId}. Reason: ${reason.trim()}`);
 
     res.json({ success: true, message: newPaused ? 'Complaint paused.' : 'Complaint resumed.', paused: newPaused });
   } catch (err) {
@@ -277,9 +292,24 @@ router.put('/complaints/:id/pause', async (req, res) => {
   }
 });
 
-// ─── Delete Complaint ───────────────────────────────────────────────────────
+// ─── Delete Complaint (with reason + email confirmation security check) ────────
 router.delete('/complaints/:id', async (req, res) => {
   try {
+    const { reason, email } = req.body;
+    if (!reason || reason.trim().length < 10) {
+      return res.status(400).json({ success: false, message: 'A reason (minimum 10 characters) is required to delete a complaint.' });
+    }
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email confirmation is required.' });
+    }
+
+    // Verify email matches the logged-in user's email
+    const fullUser = await db.users.findById(req.user.id);
+    if (!fullUser) return res.status(401).json({ success: false, message: 'User not found.' });
+    if (email.toLowerCase().trim() !== fullUser.email.toLowerCase()) {
+      return res.status(401).json({ success: false, message: 'Email does not match your registered email. Please try again.' });
+    }
+
     const complaint = await db.complaints.findOne(c => c.id === req.params.id || c.referenceId === req.params.id);
     if (!complaint) return res.status(404).json({ success: false, message: 'Complaint not found.' });
     if (complaint.userId !== req.user.id) return res.status(403).json({ success: false, message: 'Forbidden.' });
@@ -288,6 +318,10 @@ router.delete('/complaints/:id', async (req, res) => {
     if (!deletable.includes(complaint.status)) {
       return res.status(400).json({ success: false, message: `Cannot delete complaint in "${complaint.status}" status. Only Submitted or Acknowledged complaints can be deleted.` });
     }
+
+    // Log deletion with reason before removing
+    logAuditAction(req, 'COMPLAINT_DELETED', 'COMPLAINT', complaint.id,
+      `Student deleted complaint ${complaint.referenceId}. Reason: ${reason.trim()}`);
 
     // Clean up related data
     try {
@@ -300,8 +334,6 @@ router.delete('/complaints/:id', async (req, res) => {
     } catch {}
 
     await db.complaints.deleteOne(complaint.id);
-
-    logAuditAction(req, 'COMPLAINT_DELETED', 'COMPLAINT', complaint.id, `Student deleted complaint ${complaint.referenceId}`);
 
     res.json({ success: true, message: 'Complaint deleted successfully.' });
   } catch (err) {

@@ -26,7 +26,7 @@ export default function AdminLogin() {
   const [qrCountdown, setQrCountdown] = useState(0);
   const pollRef = useRef(null);
   const countdownRef = useRef(null);
-  const { kratosLogin, startQrLogin, pollQrLogin } = useAuth();
+  const { kratosLogin, startPushLogin, pollPushLogin, startQrLogin, pollQrLogin } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -48,12 +48,18 @@ export default function AdminLogin() {
     setError('');
     setKratosState('waiting');
     try {
-      const user = await kratosLogin(kratosEmail);
-      redirectByRole(user);
-    } catch (err) {
-      setKratosState('idle');
-      setError(err.message || 'KratosID authentication failed.');
-    }
+      const startRes = await startPushLogin(kratosEmail);
+      const pushToken = startRes.token;
+      let attempts = 0;
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts >= 45) { clearInterval(pollRef.current); setKratosState('idle'); setError('Push timed out.'); return; }
+        try {
+          const user = await pollPushLogin(pushToken);
+          if (user) { clearInterval(pollRef.current); redirectByRole(user); }
+        } catch (err) { clearInterval(pollRef.current); setKratosState('idle'); setError(err.message || 'Push authentication failed.'); }
+      }, 2000);
+    } catch (err) { setKratosState('idle'); setError(err.message || 'Failed to send push notification.'); }
   };
 
   const handleStartQR = async () => {

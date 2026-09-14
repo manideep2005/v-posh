@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 // Public Pages
 import Landing from './pages/Landing';
 import Awareness from './pages/Awareness';
+import VerifyCase from './pages/VerifyCase';
 
 // Auth Pages
 import StudentLogin from './pages/auth/StudentLogin';
@@ -60,6 +61,7 @@ export default function App() {
               {/* Public Routes */}
               <Route path="/" element={<Landing />} />
               <Route path="/awareness" element={<Awareness />} />
+              <Route path="/verify/:refId" element={<VerifyCase />} />
 
               {/* Auth Routes */}
               <Route path="/auth/student/login" element={<StudentLogin />} />

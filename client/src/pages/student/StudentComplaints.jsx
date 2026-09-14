@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, formatDate } from '../../utils/api';
 import StatusBadge from '../../components/StatusBadge';
+import ConfirmActionModal from '../../components/ConfirmActionModal';
 import { FileText, Plus, FileSearch, Pause, Play, Trash2, AlertCircle } from 'lucide-react';
 
 export default function StudentComplaints() {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
+  const [modal, setModal] = useState({ open: false, action: null, complaintId: null, complaintRef: null });
 
   useEffect(() => { fetchComplaints(); }, []);
 
@@ -19,19 +21,20 @@ export default function StudentComplaints() {
     finally { setLoading(false); }
   };
 
-  const handlePause = async (id) => {
-    try {
-      const res = await apiFetch(`/student/complaints/${id}/pause`, { method: 'PUT' });
-      if (res.success) { setMsg(res.message); fetchComplaints(); }
-    } catch (e) { alert(e.message); }
-  };
-
-  const handleDelete = async (id, refId) => {
-    if (!confirm(`Delete complaint ${refId}? This cannot be undone.`)) return;
-    try {
-      const res = await apiFetch(`/student/complaints/${id}`, { method: 'DELETE' });
-      if (res.success) { setMsg(res.message); fetchComplaints(); }
-    } catch (e) { alert(e.message); }
+  const handleModalConfirm = async ({ reason, email }) => {
+    const { action, complaintId } = modal;
+    const method = action === 'delete' ? 'DELETE' : 'PUT';
+    const url = action === 'delete'
+      ? `/student/complaints/${complaintId}`
+      : `/student/complaints/${complaintId}/pause`;
+    const res = await apiFetch(url, { method, body: { reason, email } });
+    if (res.success) {
+      setMsg(res.message);
+      setModal({ open: false, action: null, complaintId: null, complaintRef: null });
+      fetchComplaints();
+    } else {
+      throw new Error(res.message || 'Action failed.');
+    }
   };
 
   if (loading) return <div className="container" style={{ padding: '3rem 0', textAlign: 'center' }}>Loading...</div>;
@@ -81,11 +84,11 @@ export default function StudentComplaints() {
                     <td>
                       <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <Link to={`/student/complaints/${c.id}`} className="btn btn-secondary btn-sm" style={{ fontSize: '0.75rem' }}>Track</Link>
-                        <button onClick={() => handlePause(c.id)} className="btn btn-sm" title={c.paused ? 'Resume' : 'Pause'} style={{ padding: '0.3rem 0.5rem', background: c.paused ? '#FEF3C7' : 'var(--color-slate-100)', border: '1px solid var(--color-slate-300)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <button onClick={() => setModal({ open: true, action: 'pause', complaintId: c.id, complaintRef: c.referenceId })} className="btn btn-sm" title={c.paused ? 'Resume' : 'Pause'} style={{ padding: '0.3rem 0.5rem', background: c.paused ? '#FEF3C7' : 'var(--color-slate-100)', border: '1px solid var(--color-slate-300)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                           {c.paused ? <><Play size={11} style={{ color: '#D97706' }} /> Resume</> : <><Pause size={11} style={{ color: 'var(--color-slate-500)' }} /> Pause</>}
                         </button>
                         {['Submitted', 'Acknowledged'].includes(c.status) && (
-                          <button onClick={() => handleDelete(c.id, c.referenceId)} className="btn btn-danger btn-sm" style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <button onClick={() => setModal({ open: true, action: 'delete', complaintId: c.id, complaintRef: c.referenceId })} className="btn btn-danger btn-sm" style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                             <Trash2 size={11} /> Delete
                           </button>
                         )}
@@ -98,6 +101,14 @@ export default function StudentComplaints() {
           </div>
         )}
       </div>
+
+      <ConfirmActionModal
+        isOpen={modal.open}
+        onClose={() => setModal({ open: false, action: null, complaintId: null, complaintRef: null })}
+        onConfirm={handleModalConfirm}
+        action={modal.action}
+        complaintRef={modal.complaintRef}
+      />
     </div>
   );
 }

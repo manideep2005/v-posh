@@ -566,6 +566,153 @@ router.post('/kratosid/verify', authLimiter, async (req, res) => {
   }
 });
 
+// ─── KratosID Push Login (client-side polling) ────────────────────────────────
+// Two-step flow (avoids Vercel serverless timeout):
+//   1. POST /auth/kratosid/push/start  { email }  → sends push, returns request token (fast)
+//   2. POST /auth/kratosid/push/poll   { token, email }  → polls KratosID for approval
+
+// In-memory store for pending push requests (short-lived, cleared after auth)
+const pendingPushes = new Map();
+
+router.post('/kratosid/push/start', authLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ success: false, message: 'A valid email address is required.' });
+    }
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check if user exists and is not disabled
+    const existingUser = await db.users.findOne({ email: normalizedEmail });
+    if (existingUser && existingUser.status === 'disabled') {
+      return res.status(403).json({ success: false, message: 'Your account has been deactivated.' });
+    }
+
+    // Send push via KratosID (just the initial request, no polling)
+    const kratos = getKratosClient();
+    let pushToken;
+    try {
+      // We call the raw POST to /add_request and capture the token
+      const resp = await kratos._post('/add_request', { email: normalizedEmail, data: '0000', requester: config.KRATOSID_APP_NAME });
+      if (!resp.ok) {
+        const text = await resp.text();
+        const code = resp.status === 403 ? KratosIDError.NO_PRODUCT_ACCESS : KratosIDError.REQUEST_FAILED;
+        throw new KratosIDError(`Failed to send push: ${text}`, resp.status, code);
+      }
+      const tokenText = (await resp.text()).trim();
+      if (tokenText.startsWith('0000')) {
+        throw new KratosIDError('User not found or not registered on KratosID', 0, KratosIDError.USER_NOT_FOUND);
+      }
+      pushToken = tokenText.slice(0, 36);
+    } catch (kratosErr) {
+      if (kratosErr.code === KratosIDError.USER_NOT_FOUND) {
+        return res.status(404).json({ success: false, code: 'KRATOSID_USER_NOT_FOUND', message: 'This email is not registered on KratosID.' });
+      }
+      if (kratosErr.code === KratosIDError.NO_PRODUCT_ACCESS) {
+        return res.status(403).json({ success: false, code: 'KRATOSID_NO_PRODUCT_ACCESS', message: 'This email is not associated with this KratosID product.' });
+      }
+      throw kratosErr;
+    }
+
+    // Store the push token with email for polling
+    pendingPushes.set(pushToken, { email: normalizedEmail, createdAt: Date.now() });
+
+    // Auto-cleanup after 2 minutes
+    setTimeout(() => pendingPushes.delete(pushToken), 120000);
+
+    res.json({ success: true, token: pushToken, message: 'Push notification sent. Check your KratosID app.' });
+  } catch (err) {
+    console.error('Push start error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to send push notification.' });
+  }
+});
+
+router.post('/kratosid/push/poll', authLimiter, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ success: false, message: 'Push token required.' });
+
+    const pending = pendingPushes.get(token);
+    if (!pending) {
+      return res.status(404).json({ success: false, message: 'Push request expired or not found.' });
+    }
+
+    const kratos = getKratosClient();
+    const resp = await kratos._post('/get_data', { token });
+    const status = (await resp.text()).trim();
+
+    if (status.startsWith('pending')) {
+      return res.json({ success: false, approved: false, status: 'pending' });
+    }
+    if (status.startsWith('expired') || status === 'Authorization denied') {
+      pendingPushes.delete(token);
+      return res.json({ success: false, approved: false, status: 'denied', message: 'Push denied by user.' });
+    }
+    if (status.startsWith('Authorization timeout')) {
+      pendingPushes.delete(token);
+      return res.json({ success: false, approved: false, status: 'timeout', message: 'Push timed out.' });
+    }
+
+    // Try to parse as approved data
+    let approved = false;
+    try {
+      const data = JSON.parse(status);
+      if (Array.isArray(data) && data.length > 0) approved = true;
+      if (data && data.Verification) approved = true;
+    } catch (_) {}
+
+    if (!approved) {
+      pendingPushes.delete(token);
+      return res.json({ success: false, approved: false, status: 'unknown', message: 'Unexpected response from KratosID.' });
+    }
+
+    // Approved! Issue JWT
+    pendingPushes.delete(token);
+    const normalizedEmail = pending.email;
+    let user = await db.users.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      // Auto-detect role from domain
+      const studentDomains = config.ALLOWED_STUDENT_DOMAINS;
+      const facultyDomains = config.ALLOWED_FACULTY_DOMAINS;
+      const emailDomain = normalizedEmail.split('@')[1];
+      const autoRole = studentDomains.includes(emailDomain) ? 'student' : facultyDomains.includes(emailDomain) ? 'faculty' : 'student';
+      const localPart = normalizedEmail.split('@')[0];
+
+      user = await db.users.insertOne({
+        name: localPart,
+        email: normalizedEmail,
+        password: null,
+        role: autoRole,
+        studentId: autoRole === 'student' ? localPart.toUpperCase() : '',
+        employeeId: autoRole === 'faculty' ? localPart.toUpperCase() : '',
+        department: '',
+        year: '',
+        phone: '',
+        authProvider: 'kratosid',
+        status: 'active',
+        lastActiveAt: new Date().toISOString()
+      });
+      logAuditAction(req, autoRole === 'student' ? 'STUDENT_REGISTERED_KRATOSID' : 'FACULTY_REGISTERED_KRATOSID', 'USER', user.id,
+        `${autoRole} auto-registered via KratosID push: ${user.email}`);
+    } else {
+      await db.users.updateOne(user.id, { lastActiveAt: new Date().toISOString() });
+      logAuditAction(req, 'USER_LOGIN_KRATOSID', 'USER', user.id, `KratosID push login: ${user.name} (${user.email})`);
+    }
+
+    return res.json({
+      success: true,
+      approved: true,
+      message: 'KratosID authentication approved.',
+      token: signToken(user),
+      user: sanitizeUser(user)
+    });
+  } catch (err) {
+    console.error('Push poll error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to verify push status.' });
+  }
+});
+
 // ─── KratosID QR Login ───────────────────────────────────────────────────────
 // Two-step flow:
 //   1. POST /auth/kratosid/qr/start → returns QR payload to render

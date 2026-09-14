@@ -47,19 +47,32 @@ export function AuthProvider({ children }) {
     throw new Error(res.message || 'Login failed');
   };
 
-  // KratosID passwordless — sends push to user's phone, long-polls server-side
-  const kratosLogin = async (email) => {
-    const res = await apiFetch('/auth/kratosid/verify', {
+  // KratosID Push Login — client-side polling (avoids Vercel timeout)
+  const startPushLogin = async (email) => {
+    const res = await apiFetch('/auth/kratosid/push/start', {
       method: 'POST',
       body: JSON.stringify({ email })
+    });
+    if (!res.success) throw new Error(res.message || 'Failed to send push notification');
+    return res; // { token }
+  };
+
+  const pollPushLogin = async (pushToken) => {
+    const res = await apiFetch('/auth/kratosid/push/poll', {
+      method: 'POST',
+      body: JSON.stringify({ token: pushToken })
     });
     if (res.success && res.token) {
       localStorage.setItem('vposh_token', res.token);
       setUser(res.user);
       return res.user;
     }
-    throw new Error(res.message || 'KratosID authentication failed');
+    if (res.approved === false && res.status === 'pending') return null; // still waiting
+    throw new Error(res.message || 'Push authentication failed');
   };
+
+  // Keep old name for backward compat
+  const kratosLogin = startPushLogin;
 
   // KratosID QR Login — starts QR session, then polls for approval
   const startQrLogin = async () => {
@@ -121,6 +134,8 @@ export function AuthProvider({ children }) {
       login,
       googleLogin,
       kratosLogin,
+      startPushLogin,
+      pollPushLogin,
       startQrLogin,
       pollQrLogin,
       signupStudent,

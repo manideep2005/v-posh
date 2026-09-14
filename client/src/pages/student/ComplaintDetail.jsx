@@ -4,7 +4,8 @@ import { apiFetch, formatDate } from '../../utils/api';
 import StatusBadge from '../../components/StatusBadge';
 import Timeline from '../../components/Timeline';
 import AttachmentList from '../../components/AttachmentList';
-import { Lock, FileText, ArrowLeft, Shield, Paperclip, Download } from 'lucide-react';
+import { Lock, FileText, ArrowLeft, Shield, Paperclip, Download, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import SLACountdown from '../../components/SLACountdown';
 
 function PDFDownloadButton({ complaintId, type, label }) {
@@ -218,6 +219,32 @@ export default function ComplaintDetail() {
               </h3>
             </div>
             <Timeline history={history} currentStatus={complaint.status} />
+          </div>
+
+          {/* QR Verification Card */}
+          <div className="panel" style={{ marginTop: '1rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-navy-900)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+              <QrCode size={15} /> Scan to Verify
+            </div>
+            <div style={{ background: '#fff', display: 'inline-block', padding: '0.75rem', borderRadius: 8, border: '1px solid var(--color-slate-200)' }}>
+              <QRCodeSVG
+                value={`${window.location.origin}/verify/${complaint.referenceId}`}
+                size={120}
+                bgColor="#FFFFFF"
+                fgColor="#0F172A"
+                level="M"
+                includeMargin={false}
+              />
+            </div>
+            <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'var(--color-slate-400)', fontFamily: 'monospace' }}>
+              {complaint.referenceId}
+            </div>
+            <a href={`/verify/${complaint.referenceId}`} target="_blank" rel="noopener noreferrer" style={{
+              display: 'inline-block', marginTop: '0.5rem', fontSize: '0.75rem', fontWeight: 600,
+              color: 'var(--color-teal-600)', textDecoration: 'none',
+            }}>
+              Open verification page ↗
+            </a>
           </div>
 
           <div className="confidentiality-notice" style={{ marginTop: '1rem', fontSize: '0.75rem' }}>
