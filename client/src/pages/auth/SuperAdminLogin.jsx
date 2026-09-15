@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useGoogleLogin } from '@react-oauth/google';
 import { Shield, AlertCircle, Smartphone, QrCode, Mail} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import RateLimitAlert, { useRateLimited, toErrorState } from '../../components/RateLimitAlert';
 
 function GoogleIcon() {
   return (
@@ -24,8 +25,10 @@ export default function SuperAdminLogin() {
   const [kratosState, setKratosState] = useState('idle');
   const [qrData, setQrData] = useState(null);
   const [qrCountdown, setQrCountdown] = useState(0);
+  const [pushCountdown, setPushCountdown] = useState(0);
   const pollRef = useRef(null);
   const countdownRef = useRef(null);
+  const rateLimited = useRateLimited(error);
   const { kratosLogin, startPushLogin, pollPushLogin, startQrLogin, pollQrLogin, login } = useAuth();
   const navigate = useNavigate();
 
@@ -36,24 +39,44 @@ export default function SuperAdminLogin() {
     };
   }, []);
 
+  // Push waits a full 90s (like QR) and tolerates transient poll errors.
   const handleKratosLogin = async (e) => {
     e.preventDefault();
     if (!kratosEmail) return;
     setError('');
     setKratosState('waiting');
+    setPushCountdown(90);
     try {
       const startRes = await startPushLogin(kratosEmail);
       const pushToken = startRes.token;
-      let attempts = 0;
+      const startedAt = Date.now();
+      const WAIT_MS = 90 * 1000;
       pollRef.current = setInterval(async () => {
-        attempts++;
-        if (attempts >= 45) { clearInterval(pollRef.current); setKratosState('idle'); setError('Push timed out.'); return; }
+        const elapsed = Date.now() - startedAt;
+        if (elapsed >= WAIT_MS) {
+          clearInterval(pollRef.current);
+          setKratosState('idle');
+          setPushCountdown(0);
+          setError('Push authentication timed out after 90s. Please try again or use the QR Code tab.');
+          return;
+        }
+        setPushCountdown(Math.ceil((WAIT_MS - elapsed) / 1000));
         try {
           const user = await pollPushLogin(pushToken);
-          if (user) { clearInterval(pollRef.current); if (user.role === 'super_admin') navigate('/super-admin/dashboard'); else if (user.role === 'faculty') navigate('/faculty/dashboard'); else navigate('/admin/dashboard'); }
-        } catch (err) { clearInterval(pollRef.current); setKratosState('idle'); setError(err.message || 'Push authentication failed.'); }
+          if (user) { clearInterval(pollRef.current); setPushCountdown(0); if (user.role === 'super_admin') navigate('/super-admin/dashboard'); else if (user.role === 'faculty') navigate('/faculty/dashboard'); else navigate('/admin/dashboard'); }
+        } catch (err) {
+          const msg = (err && err.message) || '';
+          const definitive = err.isRateLimit || /denied|expired|not found|not registered|deactivated/i.test(msg);
+          if (definitive) {
+            clearInterval(pollRef.current);
+            setKratosState('idle');
+            setPushCountdown(0);
+            setError(toErrorState(err, 'Push authentication failed.'));
+          }
+          // Transient error — keep polling until the 90s cap
+        }
       }, 2000);
-    } catch (err) { setKratosState('idle'); setError(err.message || 'Failed to send push notification.'); }
+    } catch (err) { setKratosState('idle'); setPushCountdown(0); setError(toErrorState(err, 'Failed to send push notification.')); }
   };
 
   const handleStartQR = async () => {
@@ -74,13 +97,20 @@ export default function SuperAdminLogin() {
           else if (user.role === 'faculty') navigate('/faculty/dashboard');
           else navigate('/admin/dashboard');
         } catch (err) {
+          // A 429 while polling must stop the loop — hammering a rate-limited
+          // endpoint only extends the lockout.
+          if (err && err.isRateLimit) {
+            clearInterval(pollRef.current); clearInterval(countdownRef.current);
+            setKratosState('idle'); setQrData(null); setError(err);
+            return;
+          }
           if (err.message && (err.message.includes('timed out') || err.message.includes('denied') || err.message.includes('expired'))) {
             clearInterval(pollRef.current); clearInterval(countdownRef.current);
             setKratosState('idle'); setQrData(null); setError(err.message);
           }
         }
       }, 3000);
-    } catch (err) { setKratosState('idle'); setQrData(null); setError(err.message || 'Failed to start QR login.'); }
+    } catch (err) { setKratosState('idle'); setQrData(null); setError(toErrorState(err, 'Failed to start QR login.')); }
   };
 
   const cancelQR = () => {
@@ -125,23 +155,14 @@ export default function SuperAdminLogin() {
           <p style={{ fontSize: '0.8125rem', color: 'var(--color-slate-500)', marginTop: '0.3rem' }}>V-POSH · System Administration</p>
         </div>
 
-        {error && <div className="alert alert-danger" style={{ marginBottom: '1.25rem' }}><AlertCircle size={15} /><span>{error}</span></div>}
+        {error && error.isRateLimit ? (
+          <RateLimitAlert error={error} onDismiss={() => setError('')} />
+        ) : error && <div className="alert alert-danger" style={{ marginBottom: '1.25rem' }}><AlertCircle size={15} /><span>{error}</span></div>}
 
         {/* KratosID Section */}
         <div style={{ background: 'var(--color-navy-900)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1rem' }}>
           <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
             <img src="/vit-ap-logo.png" alt="VIT-AP" style={{ height: 48, marginBottom: '0.5rem', filter: 'brightness(1.3)' }} />
-          </div>
-          {/* Maintenance banner */}
-          <div style={{
-            marginBottom: '1rem', padding: '0.65rem 0.9rem',
-            backgroundColor: 'rgba(251,191,36,0.12)',
-            border: '1px solid rgba(251,191,36,0.4)',
-            borderRadius: '6px',
-            fontSize: '0.78rem', color: '#FCD34D', textAlign: 'center'
-          }}>
-            <strong>⚠️ We’re having issues with KratosID email authentication.</strong>
-            {' '}Use the <strong>QR Code</strong> tab or <strong>Google Sign-In</strong> below to log in.
           </div>
           <div style={{ display: 'flex', gap: '4px', marginBottom: '1rem', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px' }}>
             <button onClick={() => { setAuthTab('push'); cancelQR(); setError(''); }} style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '600', fontFamily: 'inherit', background: authTab === 'push' ? 'rgba(94,234,212,0.2)' : 'transparent', color: authTab === 'push' ? '#5EEAD4' : '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
@@ -155,8 +176,8 @@ export default function SuperAdminLogin() {
           {authTab === 'push' && (
             <form onSubmit={handleKratosLogin}>
               <input type="email" className="form-control" placeholder="your-email@vitap.ac.in" value={kratosEmail} onChange={e => { setKratosEmail(e.target.value); setError(''); }} required disabled={kratosState === 'waiting'} style={{ marginBottom: '0.65rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
-              <button type="submit" disabled={kratosState === 'waiting' || !kratosEmail} style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: kratosState === 'waiting' ? 'rgba(94,234,212,0.2)' : '#14B8A6', color: '#fff', fontWeight: '700', fontSize: '0.9rem', border: 'none', cursor: kratosState === 'waiting' ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                {kratosState === 'waiting' ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⏳</span> Waiting for approval…</> : 'Send Push Notification'}
+              <button type="submit" disabled={rateLimited || kratosState === 'waiting' || !kratosEmail} style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: kratosState === 'waiting' ? 'rgba(94,234,212,0.2)' : '#14B8A6', color: '#fff', fontWeight: '700', fontSize: '0.9rem', border: 'none', cursor: kratosState === 'waiting' ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                {kratosState === 'waiting' ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⏳</span> Waiting for approval… {formatTime(pushCountdown)}</> : 'Send Push Notification'}
               </button>
             </form>
           )}
@@ -190,7 +211,7 @@ export default function SuperAdminLogin() {
           <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--color-slate-200)' }} />
         </div>
 
-        <button type="button" onClick={() => { setError(''); handleGoogleLogin(); }} disabled={googleLoading || kratosState === 'waiting'} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.65rem', padding: '0.72rem 1rem', backgroundColor: '#FFFFFF', border: '1.5px solid #E2E8F0', borderRadius: '6px', fontSize: '0.9375rem', fontWeight: '600', color: '#1E293B', cursor: (googleLoading || kratosState === 'waiting') ? 'not-allowed' : 'pointer', opacity: (googleLoading || kratosState === 'waiting') ? 0.6 : 1, transition: 'border-color 0.15s, box-shadow 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', fontFamily: 'inherit' }}>
+        <button type="button" onClick={() => { setError(''); handleGoogleLogin(); }} disabled={googleLoading || rateLimited || kratosState === 'waiting'} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.65rem', padding: '0.72rem 1rem', backgroundColor: '#FFFFFF', border: '1.5px solid #E2E8F0', borderRadius: '6px', fontSize: '0.9375rem', fontWeight: '600', color: '#1E293B', cursor: (googleLoading || kratosState === 'waiting') ? 'not-allowed' : 'pointer', opacity: (googleLoading || kratosState === 'waiting') ? 0.6 : 1, transition: 'border-color 0.15s, box-shadow 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', fontFamily: 'inherit' }}>
           <GoogleIcon />{googleLoading ? 'Signing in…' : 'Continue with Google (VIT-AP)'}
         </button>
         <p style={{ fontSize: '0.72rem', color: 'var(--color-slate-400)', textAlign: 'center', marginTop: '0.4rem' }}>

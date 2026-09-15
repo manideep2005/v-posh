@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POSH Platform — API Workflow & Rate Limiting Documentation</title>
+<style>
+  :root {
+    --bg: #f8fafc; --panel: #ffffff; --border: #e2e8f0;
+    --text: #0f172a; --muted: #64748b;
+    --navy: #1e3a8a; --blue: #2563eb;
+    --green: #059669; --amber: #d97706; --red: #dc2626;
+    --code-bg: #0f172a; --code-text: #e2e8f0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding-bottom: 4rem; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
+
+  header { background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%); color: #fff; padding: 2.5rem 0; margin-bottom: 2rem; }
+  header h1 { font-size: 1.9rem; font-weight: 700; }
+  header p { color: #c7d2fe; margin-top: 0.4rem; max-width: 760px; }
+  header .meta { display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
+  header .meta span { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 99px; padding: 0.2rem 0.85rem; font-size: 0.78rem; }
+
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 2px solid var(--border); color: var(--navy); }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); }
+  p { margin-bottom: 0.7rem; color: #334155; }
+  ul, ol { margin: 0.5rem 0 0.9rem 1.4rem; color: #334155; }
+  li { margin-bottom: 0.3rem; }
+
+  .toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.4rem; }
+  .toc ol { margin-left: 1.2rem; columns: 2; column-gap: 2.5rem; }
+  .toc a { color: var(--blue); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 0.9rem 0 1.2rem; font-size: 0.88rem; }
+  th { background: #f1f5f9; text-align: left; padding: 0.6rem 0.9rem; font-weight: 600; color: var(--navy); border-bottom: 2px solid var(--border); }
+  td { padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  code { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 0.82em; background: #eef2f7; border: 1px solid #e2e8f0; border-radius: 4px; padding: 0.1rem 0.35rem; color: #b91c1c; }
+  th code, .method { color: #fff; font-weight: 700; }
+  .method { display: inline-block; font-size: 0.72rem; border-radius: 4px; padding: 0.12rem 0.45rem; margin-right: 0.4rem; letter-spacing: 0.03em; }
+  .m-get { background: var(--green); } .m-post { background: var(--blue); }
+  .m-put { background: var(--amber); } .m-del { background: var(--red); }
+
+  pre { background: var(--code-bg); color: var(--code-text); border-radius: 8px; padding: 1rem 1.2rem; overflow-x: auto; font-size: 0.8rem; line-height: 1.55; margin: 0.8rem 0 1.2rem; font-family: Consolas, monospace; }
+  pre .c { color: #94a3b8; font-style: italic; } pre .k { color: #7dd3fc; } pre .s { color: #fca5a5; }
+  pre .hl { color: #fde047; font-weight: bold; }
+
+  .callout { border-left: 4px solid var(--blue); background: #eff6ff; border-radius: 0 8px 8px 0; padding: 0.85rem 1.1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout.warn { border-color: var(--amber); background: #fffbeb; }
+  .callout.danger { border-color: var(--red); background: #fef2f2; }
+  .callout.success { border-color: var(--green); background: #f0fdf4; }
+  .callout strong { display: block; margin-bottom: 0.2rem; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; margin: 1rem 0; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.25rem; }
+  .card h4 { font-size: 0.95rem; color: var(--navy); margin-bottom: 0.4rem; }
+  .card p, .card li { font-size: 0.85rem; color: #475569; }
+  .big { font-size: 1.7rem; font-weight: 800; color: var(--navy); display: block; line-height: 1.2; }
+  .sub { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 1.2rem 0; }
+  .fstep { display: flex; gap: 1rem; }
+  .fstep .rail { display: flex; flex-direction: column; align-items: center; }
+  .fstep .dot { width: 30px; height: 30px; min-width: 30px; border-radius: 50%; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; }
+  .fstep .line { width: 2px; flex: 1; background: var(--border); min-height: 14px; }
+  .fstep:last-child .line { display: none; }
+  .fstep .body { padding-bottom: 1.1rem; }
+  .fstep .body h4 { font-size: 0.95rem; margin-top: 0.3rem; }
+  .fstep .body p { font-size: 0.86rem; margin-bottom: 0.25rem; }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 600; border-radius: 99px; padding: 0.1rem 0.6rem; margin-right: 0.35rem; }
+  .b-ok { background: #dcfce7; color: #166534; } .b-warn { background: #fef3c7; color: #92400e; }
+  .b-err { background: #fee2e2; color: #991b1b; } .b-info { background: #dbeafe; color: #1e40af; }
+  .b-mut { background: #f1f5f9; color: #475569; }
+
+  footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>POSH Institutional Grievance Platform — System Workflow</h1>
+    <p>Complete reference of API endpoints, the login authentication pipelines (KratosID Push / QR, Google SSO, password), rate limiting, and all timing / attempt / cooling-period rules.</p>
+    <div class="meta">
+      <span>Express REST API</span><span>MongoDB (GridFS attachments)</span><span>JWT auth (24h)</span>
+      <span>KratosID passwordless</span><span>Google OAuth</span><span>Vercel serverless ready</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ══════════════════ TOC ══════════════════ -->
+  <nav class="toc">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#ratelimit">Rate limiting & cooling periods</a></li>
+      <li><a href="#login-flows">Login workflows (all methods)</a></li>
+      <li><a href="#kratosid">KratosID Push & QR pipeline</a></li>
+      <li><a href="#google">Google SSO pipeline</a></li>
+      <li><a href="#password">Password login & account recovery</a></li>
+      <li><a href="#complaint">Complaint lifecycle workflow</a></li>
+      <li><a href="#pdf">PDF document generation</a></li>
+      <li><a href="#endpoints">Full endpoint reference</a></li>
+      <li><a href="#errors">Error codes & responses</a></li>
+    </ol>
+  </nav>
+
+  <!-- ══════════════════ 1. RATE LIMIT ══════════════════ -->
+  <h2 id="ratelimit">1 · Rate Limiting & Cooling Periods</h2>
+
+  <p>All authentication-sensitive endpoints are protected by a fixed-window rate limiter
+  (<code>server/middleware/rateLimit.js</code>). Every <strong>auth route</strong> uses the shared
+  <code>authLimiter</code>; there is no per-user lockout — limiting is keyed per <strong>IP address + endpoint</strong>.</p>
+
+  <div class="grid">
+    <div class="card"><span class="big">10</span><span class="sub">max attempts / window</span><p>per IP, per endpoint bucket. The 11th request in the window is blocked.</p></div>
+    <div class="card"><span class="big">15 min</span><span class="sub">fixed window</span><p>Counter resets exactly 15 minutes after the window opened — not rolling.</p></div>
+    <div class="card"><span class="big">429</span><span class="sub">HTTP response when blocked</span><p>With a <code>Retry-After</code> header telling the client the exact seconds remaining.</p></div>
+    <div class="card"><span class="big">1 MB</span><span class="sub">JSON body limit</span><p>Global <code>express.json</code> cap; uploads go through multer (10 MB files, 5 attachments).</p></div>
+  </div>
+
+  <h3>How the limiter works internally</h3>
+  <ol>
+    <li>Key = <code>&lt;client IP&gt;:&lt;route path bucket&gt;</code> — the same IP hitting different endpoints has separate counters.</li>
+    <li>First request in a window opens a counter starting at 1; each further request increments it.</li>
+    <li>When <code>count &gt; 10</code>, the request is rejected with <strong>429</strong> and a <code>Retry-After</code> header (exact remaining seconds).</li>
+    <li>The window self-clears: a background sweep deletes entries older than 15 minutes, and any entry whose <code>windowStart</code> has expired is transparently restarted on the next hit.</li>
+  </ol>
+
+  <pre><span class="c">// server/routes/auth.js — one shared limiter for ALL auth routes</span>
+<span class="k">const</span> authLimiter = rateLimit({ windowMs: <span class="hl">15 * 60 * 1000</span>, max: <span class="hl">10</span> });
+
+<span class="c">// server/middleware/rateLimit.js — rejection behaviour</span>
+res.setHeader(<span class="s">'Retry-After'</span>, String(retryAfterSec));
+res.status(<span class="hl">429</span>).json({
+  success: <span class="k">false</span>,
+  message: <span class="s">'Too many attempts. Please wait a few minutes before trying again.'</span>
+});</pre>
+
+  <div class="callout warn">
+    <strong>⚠️ "Too many attempts" — what the user experiences</strong>
+    After the 10th failed/any attempt from one IP on one endpoint within 15 minutes, every further call —
+    even correct credentials — returns <code>429 Too Many Attempts</code>. The cooling period is the remainder
+    of the fixed window: worst case ~15 minutes, best case a few seconds (if the window is about to reset).
+    The exact time is always sent in the <code>Retry-After</code> response header.
+  </div>
+
+  <h3>Routes carrying the <code>authLimiter</code></h3>
+  <table>
+    <tr><th>Endpoint</th><th>Limited?</th><th>Purpose</th></tr>
+    <tr><td><code>POST /api/auth/student/signup</code></td><td><span class="badge b-warn">10 / 15 min</span></td><td>Student registration</td></tr>
+    <tr><td><code>POST /api/auth/login</code></td><td><span class="badge b-warn">10 / 15 min</span></td><td>Email + password (all roles)</td></tr>
+    <tr><td><code>POST /api/auth/google</code></td><td><span class="badge b-warn">10 / 15 min</span></td><td>Google ID-token sign-in</td></tr>
+    <tr><td><code>POST /api/auth/google-access</code></td><td><span class="badge b-warn">10 / 15 min</span></td><td>Google access-token sign-in</td></tr>
+    <tr><td><code>POST /api/auth/kratosid/verify</code></td><td><span class="badge b-warn">10 / 15 min</span></td><td>KratosID push (long-poll, legacy)</td></tr>
+    <tr><td><code>POST /api/auth/kratosid/push/start</code></td><td><span class="badge b-warn">10 / 15 min</span></td><td>KratosID push — step 1 (send push)</td></tr>
+    <tr><td><code>POST /api/auth/kratosid/push/poll</code></td><td><span class="badge b-warn">10 / 15 min</span></td><td>KratosID push — step 2 (status check)</td></tr>
+    <tr><td><code>POST /api/auth/kratosid/qr/start</code></td><td><span class="badge b-warn">10 / 15 min</span></td><td>KratosID QR — step 1 (render QR)</td></tr>
+    <tr><td><code>POST /api/auth/kratosid/qr/poll</code></td><td><span class="badge b-warn">10 / 15 min</span></td><td>KratosID QR — step 2 (wait for scan)</td></tr>
+    <tr><td><code>POST /api/auth/forgot-password</code></td><td><span class="badge b-warn">10 / 15 min</span></td><td>Password reset request</td></tr>
+    <tr><td><code>GET /api/auth/me</code></td><td><span class="badge b-ok">unlimited</span></td><td>Token-authenticated, not brute-forceable</td></tr>
+    <tr><td><code>POST /api/auth/change-password</code></td><td><span class="badge b-ok">unlimited</span></td><td>Requires valid JWT + current password</td></tr>
+    <tr><td><code>POST /api/auth/reset-password</code></td><td><span class="badge b-ok">unlimited</span></td><td>Requires single-use reset token</td></tr>
+  </table>
+
+  <div class="callout">
+    <strong>ℹ️ Fixed window vs rolling window</strong>
+    This is a <em>fixed-window</em> limiter: the counter opens on the first request and dies exactly 15 minutes
+    later regardless of activity. A burst of 10 requests at minute 14:59 still blocks request #11 at 15:00+ε
+    only until the new window opens. Memory is bounded by a periodic sweep that deletes expired entries.
+  </div>
+
+  <div class="callout danger">
+    <strong>🚫 Client-side polling does NOT bypass the limiter</strong>
+    Push polling runs every 2s and QR polling every 3s from the browser — all of these hit
+    <code>/push/poll</code> or <code>/qr/poll</code> and consume the <strong>same 10-per-15-min budget</strong>.
+    A 90-second push wait consumes ~45 poll calls. In practice a single user can exhaust the poll bucket
+    in one or two login waits. <em>Recommended fix:</em> raise the limit or exempt the poll routes with a
+    separate, higher <code>rateLimit</code> bucket.
+  </div>
+
+  <!-- ══════════════════ 2. LOGIN FLOWS ══════════════════ -->
+  <h2 id="login-flows">2 · Login Workflows — Overview</h2>
+
+  <p>The platform has four independent authentication pipelines. All of them converge on the same
+  outcome: a signed <strong>JWT</strong> (24h expiry) plus a sanitized user object stored in the client's
+  <code>AuthContext</code>.</p>
+
+  <table>
+    <tr><th>Method</th><th>Routes</th><th>Steps</th><th>Total wait ceiling</th><th>Auto-provision</th></tr>
+    <tr>
+      <td><strong>KratosID Push</strong></td>
+      <td><code>/kratosid/push/start</code> → <code>/kratosid/push/poll</code></td>
+      <td>2</td>
+      <td><span class="badge b-info">~90 s client / 120 s server</span></td>
+      <td>Yes (role from email domain)</td>
+    </tr>
+    <tr>
+      <td><strong>KratosID QR</strong></td>
+      <td><code>/kratosid/qr/start</code> → <code>/kratosid/qr/poll</code></td>
+      <td>2</td>
+      <td><span class="badge b-info">~90 s client / 85 s server</span></td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><strong>Google SSO</strong></td>
+      <td><code>/google</code> or <code>/google-access</code></td>
+      <td>1</td>
+      <td><span class="badge b-ok">instant</span></td>
+      <td>Yes (student/faculty by domain)</td>
+    </tr>
+    <tr>
+      <td><strong>Password</strong></td>
+      <td><code>/login</code> (+ <code>/student/signup</code>)</td>
+      <td>1</td>
+      <td><span class="badge b-ok">instant</span></td>
+      <td>No (explicit signup)</td>
+    </tr>
+  </table>
+
+  <h3>Domain → role mapping (auto-provisioning)</h3>
+  <table>
+    <tr><th>Email domain</th><th>Assigned role</th><th>Notes</th></tr>
+    <tr><td><code>@vitapstudent.ac.in</code></td><td><span class="badge b-info">student</span></td><td>Student ID derived from email local-part</td></tr>
+    <tr><td><code>@vitap.ac.in</code></td><td><span class="badge b-warn">faculty</span></td><td>Employee ID derived from local-part</td></tr>
+    <tr><td>Whitelisted emails (<code>WHITELIST_EMAILS</code>)</td><td><span class="badge b-ok">any existing role</span></td><td>Bypass domain restriction; keep DB role (e.g. super_admin)</td></tr>
+  </table>
+
+  <!-- ══════════════════ 3. KRATOSID ══════════════════ -->
+  <h2 id="kratosid">3 · KratosID Push & QR Pipeline (detailed)</h2>
+
+  <h3>3.1 — Push login (two-step, Vercel-safe)</h3>
+  <p>Designed for serverless: no request lives longer than a few seconds. Pending requests are persisted
+  in MongoDB (<code>pending_pushes</code> collection), not in server memory, so they survive cold starts and
+  work across Vercel lambda instances.</p>
+
+  <div class="flow">
+    <div class="fstep"><div class="rail"><div class="dot">1</div><div class="line"></div></div>
+      <div class="body"><h4><span class="method m-post">POST</span><code>/api/auth/kratosid/push/start</code> <span class="badge b-warn">limiter 10/15m</span></h4>
+      <p>Body: <code>{ email }</code>. Server validates the email, rejects disabled accounts, then calls KratosID
+      <code>/add_request</code> to fire the mobile push. Extracts a 36-char push token.</p>
+      <p><span class="badge b-err">404</span> if email not registered on KratosID ·
+         <span class="badge b-err">403</span> if no product access / account disabled ·
+         <span class="badge b-ok">200</span> <code>{ success, token }</code></p>
+      <p>Persists <code>{ id: token, email, createdAt }</code> in <code>pending_pushes</code> and lazily deletes stale entries older than 3 minutes.</p>
+    </div></div>
+    <div class="fstep"><div class="rail"><div class="dot">2</div><div class="line"></div></div>
+      <div class="body"><h4><span class="method m-post">POST</span><code>/api/auth/kratosid/push/poll</code> <span class="badge b-warn">limiter 10/15m</span></h4>
+      <p>Body: <code>{ token }</code>. Client calls this <strong>every 2 seconds</strong>, up to 45 attempts (~90 s).</p>
+      <p>Server: loads pending entry → rejects <span class="badge b-err">404</span> if missing or older than
+      <strong>120 s</strong> (server-side cooling/expiry) → asks KratosID <code>/get_data</code> for status:</p>
+      <ul>
+        <li><code>pending…</code> → <span class="badge b-info">200</span> <code>{ approved: false, status: 'pending' }</code> — keep polling</li>
+        <li><code>expired</code> / <code>Authorization denied</code> → entry deleted, <span class="badge b-err">denied</span></li>
+        <li><code>Authorization timeout</code> → entry deleted, <span class="badge b-err">timeout</span></li>
+        <li>Approval payload (JSON array / <code>Verification</code>) → <span class="badge b-ok">approved</span> → entry deleted → JWT issued</li>
+      </ul>
+    </div></div>
+    <div class="fstep"><div class="rail"><div class="dot">3</div><div class="line"></div></div>
+      <div class="body"><h4>JWT issuance & auto-provision</h4>
+      <p>If no DB user exists for the approved email, one is created with the role derived from the email
+      domain (see §2). Both paths return <code>{ success, token, user }</code>. Audit log written
+      (<code>USER_LOGIN_KRATOSID</code> or <code>STUDENT/FACULTY_REGISTERED_KRATOSID</code>).</p>
+    </div></div>
+  </div>
+
+  <div class="callout warn">
+    <strong>⏱️ Push timing summary</strong>
+    Client polls every <strong>2 s</strong>, gives up after <strong>45 attempts = 90 s</strong> ("Push timed out.").
+    Server-side pending entry expires after <strong>120 s</strong>. KratosID's own request window is ~2 minutes.
+    Effectively the user has ~90 seconds to tap Approve on the phone.
+  </div>
+
+  <h3>3.2 — QR login</h3>
+  <div class="flow">
+    <div class="fstep"><div class="rail"><div class="dot">1</div><div class="line"></div></div>
+      <div class="body"><h4><span class="method m-post">POST</span><code>/api/auth/kratosid/qr/start</code></h4>
+      <p>No body needed. Server calls KratosID <code>startQrLogin()</code> which registers a login session and
+      returns the QR payload. Client renders it as a QR code and shows a countdown.</p>
+      <p><span class="badge b-ok">200</span> <code>{ success, token, qrData… }</code></p>
+    </div></div>
+    <div class="fstep"><div class="rail"><div class="dot">2</div><div class="line"></div></div>
+      <div class="body"><h4><span class="method m-post">POST</span><code>/api/auth/kratosid/qr/poll</code></h4>
+      <p>Body: <code>{ token }</code>. Client polls <strong>every 3 seconds</strong>, ≤45 attempts (~90 s plus countdown grace).</p>
+      <p>Server long-polls KratosID <code>waitForQrLogin(token, { timeout: 85000 })</code> — i.e. a single
+      poll call can block up to <strong>85 s</strong> waiting for the scan. On approval, the raw payload is parsed for
+      the user's <code>email</code>; missing email → <span class="badge b-err">400</span>.</p>
+      <ul>
+        <li>Denied by user → <span class="badge b-err">401</span> "QR login denied by user."</li>
+        <li>Timed out / expired → <span class="badge b-err">401</span> "QR login timed out or expired."</li>
+        <li>Approved + email → find-or-create user → <span class="badge b-ok">200</span> <code>{ token, user }</code></li>
+      </ul>
+    </div></div>
+  </div>
+
+  <div class="callout">
+    <strong>🔄 Why QR works better on Vercel</strong>
+    QR uses KratosID's own server-side session state (token lives at KratosID), whereas push originally used
+    an in-memory Map that broke on serverless. Push is now DB-backed too, so <strong>both</strong> work on Vercel.
+  </div>
+
+  <h3>3.3 — Legacy single-call verify</h3>
+  <p><code>POST /api/auth/kratosid/verify</code> sends the push <em>and</em> long-polls for approval inside one
+  request (≤55 s). Kept for compatibility but the two-step push flow is preferred because Vercel
+  serverless functions time out before 55 s on some plans.</p>
+
+  <!-- ══════════════════ 4. GOOGLE ══════════════════ -->
+  <h2 id="google">4 · Google SSO Pipeline</h2>
+
+  <div class="flow">
+    <div class="fstep"><div class="rail"><div class="dot">1</div><div class="line"></div></div>
+      <div class="body"><h4>Client obtains Google credential</h4>
+      <p>Either a Google <strong>ID token</strong> (Google Identity Services / <code>google-one-tap</code>) or an
+      <strong>access token</strong> (<code>useGoogleLogin()</code> implicit flow). Sent to:</p>
+      <p><span class="method m-post">POST</span><code>/api/auth/google</code> <code>{ idToken }</code> —or—
+      <span class="method m-post">POST</span><code>/api/auth/google-access</code> <code>{ accessToken }</code></p>
+    </div></div>
+    <div class="fstep"><div class="rail"><div class="dot">2</div><div class="line"></div></div>
+      <div class="body"><h4>Server-side verification</h4>
+      <ul>
+        <li><strong>ID-token path:</strong> <code>google-auth-library</code> <code>verifyIdToken()</code> checks signature, expiry and audience (<code>GOOGLE_CLIENT_ID</code>).</li>
+        <li><strong>Access-token path:</strong> server calls <code>googleapis.com/oauth2/v3/userinfo</code> with the bearer token and reads the profile.</li>
+      </ul>
+      <p>Invalid/expired token → <span class="badge b-err">401</span>.</p>
+    </div></div>
+    <div class="fstep"><div class="rail"><div class="dot">3</div><div class="line"></div></div>
+      <div class="body"><h4>Domain gate</h4>
+      <p>Email domain must be <code>@vitapstudent.ac.in</code> or <code>@vitap.ac.in</code>, unless the address is in
+      <code>WHITELIST_EMAILS</code>. Otherwise → <span class="badge b-err">403</span> "Only @vitapstudent.ac.in … allowed."</p>
+    </div></div>
+    <div class="fstep"><div class="rail"><div class="dot">4</div><div class="line"></div></div>
+      <div class="body"><h4>Find-or-create user → JWT</h4>
+      <p>Existing disabled account → <span class="badge b-err">403</span>. New email → auto-provision with domain-derived
+      role, student/employee ID parsed from the local-part (e.g. <code>mani.23bce0042@…</code> → ID
+      <code>23BCE0042</code>). Google fields (<code>googleId</code>, avatar, <code>authProvider</code>) patched onto
+      existing users. Returns <span class="badge b-ok">200</span> <code>{ token, user }</code>.</p>
+    </div></div>
+  </div>
+
+  <div class="callout warn">
+    <strong>⚠️ Known production gotcha: <code>origin_mismatch</code></strong>
+    Google rejects sign-in unless the exact browser origin is registered in Google Cloud Console →
+    Credentials → OAuth client → <em>Authorized JavaScript origins</em>. Add both
+    <code>http://localhost:5173</code> and the production Vercel URL.
+  </div>
+
+  <!-- ══════════════════ 5. PASSWORD ══════════════════ -->
+  <h2 id="password">5 · Password Login, Signup & Recovery</h2>
+
+  <h3>5.1 — Signup <span class="method m-post">POST</span><code>/api/auth/student/signup</code></h3>
+  <ul>
+    <li>Required: name, email, password (≥8 chars), studentId, department. Optional: year, phone.</li>
+    <li>Uniqueness checks on both email and student ID → <span class="badge b-err">409</span> on duplicates.</li>
+    <li>Password hashed with bcrypt (10 rounds) → user created with role <code>student</code> → JWT returned immediately (auto-login).</li>
+  </ul>
+
+  <h3>5.2 — Login <span class="method m-post">POST</span><code>/api/auth/login</code></h3>
+  <p>Body: <code>{ email, password, expectedRole? }</code>. Checks in order:</p>
+  <ol>
+    <li>Missing fields → <span class="badge b-err">400</span></li>
+    <li>Unknown email → <span class="badge b-err">401</span> generic "Invalid credentials" (no user enumeration)</li>
+    <li><code>status === 'disabled'</code> → <span class="badge b-err">403</span> "account has been deactivated"</li>
+    <li>bcrypt compare fails → <span class="badge b-err">401</span> same generic message</li>
+    <li>Role mismatch vs <code>expectedRole</code> → <span class="badge b-err">403</span>, with one exception:
+        <code>admin</code> portal also accepts <code>super_admin</code> and <code>faculty</code> accounts</li>
+    <li>Success → <code>lastActiveAt</code> updated, audit log, <span class="badge b-ok">200</span> <code>{ token, user }</code></li>
+  </ol>
+
+  <h3>5.3 — Recovery: forgot / reset</h3>
+  <ul>
+    <li><span class="method m-post">POST</span><code>/forgot-password</code> — always returns the same generic
+    message (account existence never disclosed). Internally generates a 32-byte random token, stores only its
+    SHA-256 hash with a <strong>30-minute expiry</strong>, and (in this build) returns the reset link as
+    <code>devLink</code> since SMTP is not wired.</li>
+    <li><span class="method m-post">POST</span><code>/reset-password</code> — validates the token hash + expiry,
+    sets the new bcrypt password, and immediately nulls the token so it is <strong>single-use</strong>.</li>
+    <li>Password change (<code>/change-password</code>) requires a valid JWT <em>and</em> the current password.</li>
+  </ul>
+
+  <!-- ══════════════════ 6. COMPLAINT LIFECYCLE ══════════════════ -->
+  <h2 id="complaint">6 · Complaint Lifecycle Workflow</h2>
+
+  <p>Every route below requires the <code>Authorization: Bearer &lt;jwt&gt;</code> header. Roles:
+  <code>student</code>, <code>faculty</code>, <code>admin</code>, <code>super_admin</code>.</p>
+
+  <div class="flow">
+    <div class="fstep"><div class="rail"><div class="dot">1</div><div class="line"></div></div>
+      <div class="body"><h4>Submission — student or faculty</h4>
+      <p><span class="method m-post">POST</span><code>/api/student/complaints</code> /
+      <code>/api/faculty/complaints</code> — creates the complaint, generates a case reference, sets SLA clock,
+      optional attachments via <span class="method m-post">POST</span><code>/api/uploads</code> (multipart, ≤5 files,
+      10 MB each, stored in GridFS).</p>
+    </div></div>
+    <div class="fstep"><div class="rail"><div class="dot">2</div><div class="line"></div></div>
+      <div class="body"><h4>Admin triage & allocation</h4>
+      <p><span class="method m-get">GET</span><code>/api/admin/complaints</code> — queue with filters ·
+      <span class="method m-post">POST</span><code>/api/admin/complaints/:id/allocate</code> — assign an officer ·
+      <code>/bulk-allocate</code> · <code>/auto-allocate</code> (workload-based routing via
+      <span class="method m-get">GET</span><code>/api/admin/workload</code>).</p>
+    </div></div>
+    <div class="fstep"><div class="rail"><div class="dot">3</div><div class="line"></div></div>
+      <div class="body"><h4>Resolution loop</h4>
+      <p><span class="method m-put">PUT</span><code>/api/admin/complaints/:id/status</code> — transitions
+      (in-review → investigating → resolved etc.), each transition is audit-logged ·
+      <span class="method m-post">POST</span><code>/api/admin/complaints/:id/updates</code> — case notes / progress posts.</p>
+    </div></div>
+    <div class="fstep"><div class="rail"><div class="dot">4</div><div class="line"></div></div>
+      <div class="body"><h4>Student controls</h4>
+      <p><span class="method m-put">PUT</span>/<span class="method m-post">POST</span><code>/api/student/complaints/:id/pause</code>
+      — pause with reason + email confirmation (POST alias added for Vercel edge-body robustness) ·
+      <span class="method m-del">DELETE</span>/<span class="method m-post">POST</span><code>/api/student/complaints/:id/delete</code>
+      — withdraw the complaint (POST alias for the same reason).</p>
+    </div></div>
+    <div class="fstep"><div class="rail"><div class="dot">5</div><div class="line"></div></div>
+      <div class="body"><h4>SLA monitoring & escalation</h4>
+      <p><span class="method m-get">GET</span><code>/api/student/complaints-sla</code> — per-complaint SLA
+      countdown data rendered by the client <code>SLACountdown</code> component. Overdue cases escalate through the
+      admin panel; super admin monitors via <code>/api/super-admin/workload</code>.</p>
+    </div></div>
+  </div>
+
+  <h3>Supporting endpoints</h3>
+  <table>
+    <tr><th>Area</th><th>Endpoints</th><th>Notes</th></tr>
+    <tr><td>Notifications</td><td><code>GET /api/notifications</code> · <code>PUT /:id/read</code> · <code>PUT /read-all</code></td><td>In-app notification bell</td></tr>
+    <tr><td>Attachments</td><td><code>GET /api/attachments/:id/file</code></td><td>Authenticated GridFS download stream</td></tr>
+    <tr><td>Awareness</td><td><code>GET /api/awareness/info</code></td><td>Public POSH awareness content</td></tr>
+    <tr><td>Profiles</td><td><code>GET/PUT /api/student/profile</code> · <code>/api/faculty/profile</code></td><td>Self-service profile edit</td></tr>
+    <tr><td>Avatar</td><td><code>POST /api/auth/profile-picture</code></td><td>multer ≤5 MB, JPEG/PNG/WebP → GridFS</td></tr>
+    <tr><td>Super admin</td><td><code>/api/super-admin/admins</code> (create/role/status) · <code>/audit-logs</code> · <code>/settings</code> · <code>/announcements</code></td><td>Platform administration</td></tr>
+  </table>
+
+  <!-- ══════════════════ 7. PDF ══════════════════ -->
+  <h2 id="pdf">7 · PDF Document Generation</h2>
+
+  <p>Server-side rendering with pdfkit (<code>server/services/pdf.js</code>). Documents include a 4-page
+  status report: complaint summary, status history, POSH Act guidelines, and rights/remedies. Every document
+  embeds a verification QR / doc ID so it can be validated publicly.</p>
+
+  <table>
+    <tr><th>Endpoint</th><th>Role</th><th>Output</th></tr>
+    <tr><td><code>GET /api/pdf/student/complaints/:id/acknowledgement</code></td><td><span class="badge b-info">student</span></td><td>Filing acknowledgement PDF</td></tr>
+    <tr><td><code>GET /api/pdf/student/complaints/:id/status-report</code></td><td><span class="badge b-info">student</span></td><td>4-page status report + guidelines</td></tr>
+    <tr><td><code>GET /api/pdf/admin/complaints/:id/acknowledgement</code></td><td><span class="badge b-warn">admin / super_admin</span></td><td>Admin copy of acknowledgement</td></tr>
+    <tr><td><code>GET /api/pdf/admin/complaints/:id/status-report</code></td><td><span class="badge b-warn">admin / super_admin</span></td><td>Admin copy of status report</td></tr>
+    <tr><td><code>GET /api/pdf/verify/:docId</code></td><td><span class="badge b-ok">public</span></td><td>Document authenticity verification</td></tr>
+    <tr><td><code>GET /api/pdf/case/:refId</code></td><td><span class="badge b-ok">public</span></td><td>Public case lookup by reference ID</td></tr>
+  </table>
+
+  <p>Responses carry <code>Content-Type: application/pdf</code>, an RFC 5987 <code>Content-Disposition</code>
+  attachment filename, and <code>Content-Length</code> (needed for reliable binary downloads through the Vercel
+  edge). The frontend fetches the file as a blob, triggers <code>a.click()</code>, and revokes the object URL
+  after a 1-second delay to avoid the race that cancelled downloads.</p>
+
+  <!-- ══════════════════ 8. FULL REFERENCE ══════════════════ -->
+  <h2 id="endpoints">8 · Full Endpoint Reference</h2>
+
+  <h3>Auth — <code>/api/auth</code></h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Auth</th><th>Limiter</th></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/student/signup</code></td><td>public</td><td>10/15m</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/login</code></td><td>public</td><td>10/15m</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/me</code></td><td>JWT</td><td>—</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/change-password</code></td><td>JWT</td><td>—</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/forgot-password</code></td><td>public</td><td>10/15m</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/reset-password</code></td><td>reset token</td><td>—</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/google</code></td><td>public</td><td>10/15m</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/google-access</code></td><td>public</td><td>10/15m</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/kratosid/verify</code></td><td>public</td><td>10/15m</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/kratosid/push/start</code></td><td>public</td><td>10/15m</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/kratosid/push/poll</code></td><td>public</td><td>10/15m</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/kratosid/qr/start</code></td><td>public</td><td>10/15m</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/kratosid/qr/poll</code></td><td>public</td><td>10/15m</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/profile-picture</code></td><td>JWT</td><td>—</td></tr>
+  </table>
+
+  <h3>Student — <code>/api/student</code></h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/dashboard</code></td><td>Aggregated stats for the student home</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/complaints</code></td><td>File a new complaint</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/complaints</code> · <code>/complaints/:id</code></td><td>List / detail</td></tr>
+    <tr><td><span class="method m-put">PUT</span></td><td><code>/complaints/:id/pause</code></td><td>Pause (alias: POST)</td></tr>
+    <tr><td><span class="method m-del">DELETE</span></td><td><code>/complaints/:id</code></td><td>Withdraw (alias: POST <code>/delete</code>)</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/complaints-sla</code></td><td>SLA countdown feed</td></tr>
+    <tr><td><span class="method m-put">PUT</span></td><td><code>/profile</code></td><td>Update profile</td></tr>
+  </table>
+
+  <h3>Admin — <code>/api/admin</code></h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/dashboard</code> · <code>/workload</code></td><td>Queue stats / officer load</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/complaints</code> · <code>/complaints/:id</code></td><td>Queue / detail</td></tr>
+    <tr><td><span class="method m-put">PUT</span></td><td><code>/complaints/:id/status</code></td><td>Status transition</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/complaints/:id/updates</code></td><td>Progress note</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/complaints/:id/allocate</code> · <code>/bulk-allocate</code> · <code>/auto-allocate</code></td><td>Officer assignment</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/students</code> · <code>/faculty</code> · <code>/available-officers</code></td><td>Directory</td></tr>
+    <tr><td><span class="method m-put">PUT</span></td><td><code>/students/:id/status</code> · <code>/faculty/:id/status</code></td><td>Enable / disable accounts</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/faculty</code></td><td>Create faculty account</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/announcements</code></td><td>Notices</td></tr>
+  </table>
+
+  <h3>Faculty, Super Admin & misc</h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/api/faculty/dashboard</code> · <code>/complaints</code> · <code>/students</code> · <code>/profile</code></td><td>Faculty workspace</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/api/faculty/complaints</code></td><td>Faculty-filed complaint</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/api/super-admin/dashboard</code> · <code>/admins</code> · <code>/audit-logs</code> · <code>/settings</code> · <code>/workload</code> · <code>/announcements</code></td><td>Platform oversight</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/api/super-admin/admins</code></td><td>Create admin</td></tr>
+    <tr><td><span class="method m-put">PUT</span></td><td><code>/api/super-admin/admins/:id/role</code> · <code>/:id/status</code></td><td>Role / status management</td></tr>
+    <tr><td><span class="method m-put">PUT</span></td><td><code>/api/super-admin/settings</code></td><td>Platform settings</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/api/super-admin/announcements</code> · <span class="method m-del">DELETE</span> <code>/:id</code></td><td>Announcement lifecycle</td></tr>
+    <tr><td><span class="method m-post">POST</span></td><td><code>/api/uploads</code></td><td>≤5 attachments, 10 MB each</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/api/attachments/:id/file</code></td><td>Authenticated download</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/api/notifications</code> (+ read routes)</td><td>Notification bell</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/api/awareness/info</code></td><td>Public awareness content</td></tr>
+    <tr><td><span class="method m-get">GET</span></td><td><code>/api/health</code></td><td>Status: online + storage engine</td></tr>
+  </table>
+
+  <!-- ══════════════════ 9. ERRORS ══════════════════ -->
+  <h2 id="errors">9 · Error Codes & Standard Responses</h2>
+  <table>
+    <tr><th>Status</th><th>Meaning in this API</th><th>Typical body</th></tr>
+    <tr><td><span class="badge b-ok">200</span></td><td>Success (poll routes also 200 while <em>pending</em>)</td><td><code>{ success: true, token?, user? }</code></td></tr>
+    <tr><td><span class="badge b-info">201</span></td><td>Created (signup)</td><td><code>{ success: true, token, user }</code></td></tr>
+    <tr><td><span class="badge b-warn">400</span></td><td>Validation failure / malformed body / QR approval without email</td><td><code>{ success: false, message }</code></td></tr>
+    <tr><td><span class="badge b-err">401</span></td><td>Bad credentials, expired/invalid token, denied or timed-out auth</td><td><code>{ success: false, message }</code></td></tr>
+    <tr><td><span class="badge b-err">403</span></td><td>Disabled account, wrong role, domain not allowed, no KratosID product access</td><td><code>{ success: false, message }</code></td></tr>
+    <tr><td><span class="badge b-err">404</span></td><td>No user / push request expired / unknown API route</td><td><code>{ success: false, message }</code></td></tr>
+    <tr><td><span class="badge b-err">409</span></td><td>Duplicate email or student ID at signup</td><td><code>{ success: false, message }</code></td></tr>
+    <tr><td><span class="badge b-err">429</span></td><td><strong>Rate limited — "Too many attempts"</strong></td><td><code>{ success: false, message }</code> + <code>Retry-After</code> header</td></tr>
+    <tr><td><span class="badge b-err">500</span></td><td>Unhandled server error (KratosID unreachable, DB failure…)</td><td><code>{ success: false, message }</code></td></tr>
+    <tr><td><span class="badge b-mut">503</span></td><td>Google Sign-In not configured (missing client ID)</td><td><code>{ success: false, message }</code></td></tr>
+  </table>
+
+  <footer>
+    <strong>POSH Institutional Grievance Platform</strong> — system workflow documentation ·
+    Generated from source: <code>server/routes/*.js</code>, <code>server/middleware/rateLimit.js</code>,
+    <code>server/app.js</code>, <code>client/src/pages/auth/*.jsx</code> · September 2026
+  </footer>
+
+</div>
+</body>
+</html>

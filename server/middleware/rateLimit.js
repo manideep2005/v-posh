@@ -33,7 +33,8 @@ function rateLimit({ windowMs = 15 * 60 * 1000, max = 100, key } = {}) {
       res.setHeader('Retry-After', String(retryAfterSec));
       return res.status(429).json({
         success: false,
-        message: 'Too many attempts. Please wait a few minutes before trying again.'
+        message: 'Too many attempts. Please wait a few minutes before trying again.',
+        retryAfter: retryAfterSec
       });
     }
 

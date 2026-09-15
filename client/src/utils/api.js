@@ -21,9 +21,21 @@ export async function apiFetch(endpoint, options = {}) {
     headers
   });
 
-  const data = await response.json();
+  // .catch: empty 2xx bodies (204, etc.) must not crash the caller
+  const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    // 429 — rate limited. Surface the server's Retry-After so the UI can
+    // show a live "try again in mm:ss" countdown.
+    if (response.status === 429) {
+      const headerVal = parseInt(response.headers.get('Retry-After') || '', 10);
+      const err = new Error(data.message || 'Too many attempts. Please wait a few minutes before trying again.');
+      err.isRateLimit = true;
+      err.retryAfter = Number.isFinite(headerVal) && headerVal > 0
+        ? headerVal
+        : (data.retryAfter || 15 * 60); // fall back to the 15-min window default
+      throw err;
+    }
     // If 401 Unauthorized, notify application context if needed
     if (response.status === 401) {
       // Token might be expired or invalid

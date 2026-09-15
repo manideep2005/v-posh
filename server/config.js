@@ -15,7 +15,19 @@ module.exports = {
   ALLOWED_STUDENT_DOMAINS: (process.env.ALLOWED_STUDENT_DOMAINS || 'vitapstudent.ac.in').split(',').map(d => d.trim().toLowerCase()),
   ALLOWED_FACULTY_DOMAINS: (process.env.ALLOWED_FACULTY_DOMAINS || 'vitap.ac.in').split(',').map(d => d.trim().toLowerCase()),
   // Emails that bypass domain role restrictions (can have any role)
-  WHITELIST_EMAILS: (process.env.WHITELIST_EMAILS || 'mani.23mis7006@vitapstudent.ac.in').split(',').map(e => e.trim().toLowerCase()),
+  WHITELIST_EMAILS: (process.env.WHITELIST_EMAILS || 'mani.23mis7006@vitapstudent.ac.in,manideep.gonugunta1802@gmail.com').split(',').map(e => e.trim().toLowerCase()),
+  // Hard role assignments — wins over domain auto-provisioning and repairs
+  // accounts that were previously provisioned with a lower role.
+  // Format: ROLE_OVERRIDES="email@domain:role, other@domain:other_role"
+  ROLE_OVERRIDES: (process.env.ROLE_OVERRIDES || 'superadmin@vitap.ac.in:super_admin,manideep.gonugunta1802@gmail.com:super_admin')
+    .split(',')
+    .map(p => p.trim())
+    .filter(Boolean)
+    .reduce((acc, pair) => {
+      const [email, role] = pair.split(':');
+      if (email && role) acc[email.trim().toLowerCase()] = role.trim();
+      return acc;
+    }, {}),
   // KratosID passwordless auth
   KRATOSID_API_KEY: process.env.KRATOSID_API_KEY || '',
   KRATOSID_PRODUCT_ID: process.env.KRATOSID_PRODUCT_ID || '',

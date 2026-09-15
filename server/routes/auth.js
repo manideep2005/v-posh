@@ -13,6 +13,11 @@ const { rateLimit } = require('../middleware/rateLimit');
 // Brute-force protection: 10 attempts per 15 minutes per IP per endpoint
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 
+// Poll endpoints: the browser polls every 2–3s during a push/QR login wait
+// (~45 calls per attempt). They get their own large bucket so a legitimate
+// login never trips the strict 10/15min auth limiter.
+const pollLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
+
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -27,6 +32,19 @@ function signToken(user) {
 function sanitizeUser(user) {
   const { password, resetTokenHash, resetTokenExpiresAt, ...safe } = user;
   return safe;
+}
+
+// Role enforcement: ROLE_OVERRIDES (env) assigns fixed roles to specific emails,
+// beating domain auto-provisioning. Also REPAIRS existing accounts that were
+// previously auto-provisioned with a lower role (e.g. a seeded super_admin who
+// logged in via SSO before the seed ran and got stuck as 'faculty').
+async function applyRoleOverride(user, email) {
+  const forced = config.ROLE_OVERRIDES[email];
+  if (user && forced && user.role !== forced) {
+    await db.users.updateOne(user.id, { role: forced });
+    user.role = forced;
+  }
+  return user;
 }
 
 // Student Registration
@@ -298,6 +316,7 @@ router.post('/google', authLimiter, async (req, res) => {
 
     // Check if account is disabled
     let user = await db.users.findOne({ email: normalizedEmail });
+    user = await applyRoleOverride(user, normalizedEmail);
     if (user && user.status === 'disabled') {
       return res.status(403).json({ success: false, message: 'Your account has been deactivated. Please contact administration.' });
     }
@@ -399,6 +418,7 @@ router.post('/google-access', authLimiter, async (req, res) => {
 
     // Check existing user
     let user = await db.users.findOne({ email: normalizedEmail });
+    user = await applyRoleOverride(user, normalizedEmail);
     if (user && user.status === 'disabled') {
       return res.status(403).json({ success: false, message: 'Your account has been deactivated. Please contact administration.' });
     }
@@ -497,6 +517,7 @@ router.post('/kratosid/verify', authLimiter, async (req, res) => {
 
     // Check if user already exists in our DB
     let user = await db.users.findOne({ email: normalizedEmail });
+    user = await applyRoleOverride(user, normalizedEmail);
     if (user && user.status === 'disabled') {
       return res.status(403).json({ success: false, message: 'Your account has been deactivated. Contact administration.' });
     }
@@ -644,7 +665,7 @@ router.post('/kratosid/push/start', authLimiter, async (req, res) => {
   }
 });
 
-router.post('/kratosid/push/poll', authLimiter, async (req, res) => {
+router.post('/kratosid/push/poll', pollLimiter, async (req, res) => {
   try {
     const { token } = req.body;
     if (!token) return res.status(400).json({ success: false, message: 'Push token required.' });
@@ -660,7 +681,11 @@ router.post('/kratosid/push/poll', authLimiter, async (req, res) => {
     }
 
     const kratos = getKratosClient();
-    const resp = await kratos._post('/get_data', { token });
+    // KratosID's push itself only lives ~30s on their side. Poll with the
+    // CURRENT push token (it may have been auto-re-sent) so the overall
+    // 90-second approval window survives multiple push lifetimes.
+    const activeToken = pending.currentPushToken || token;
+    const resp = await kratos._post('/get_data', { token: activeToken });
     const status = (await resp.text()).trim();
 
     if (status.startsWith('pending')) {
@@ -671,6 +696,22 @@ router.post('/kratosid/push/poll', authLimiter, async (req, res) => {
       return res.json({ success: false, approved: false, status: 'denied', message: 'Push denied by user.' });
     }
     if (status.startsWith('Authorization timeout')) {
+      // Auto-resend the push (up to 2 resends ≈ 30s + 30s + 30s = 90s total)
+      // instead of dying at KratosID's ~30s single-push lifetime.
+      const resendCount = pending.resendCount || 0;
+      if (resendCount < 2) {
+        try {
+          const resend = await kratos._post('/add_request', { email: pending.email, data: '0000', requester: config.KRATOSID_APP_NAME });
+          const newText = (await resend.text()).trim();
+          if (resend.ok && !newText.startsWith('0000')) {
+            await db.pendingPushes.updateOne(token, {
+              currentPushToken: newText.slice(0, 36),
+              resendCount: resendCount + 1
+            });
+            return res.json({ success: false, approved: false, status: 'pending', resent: true });
+          }
+        } catch (_) { /* fall through to final timeout below */ }
+      }
       await db.pendingPushes.deleteOne(token);
       return res.json({ success: false, approved: false, status: 'timeout', message: 'Push timed out.' });
     }
@@ -691,7 +732,20 @@ router.post('/kratosid/push/poll', authLimiter, async (req, res) => {
     // Approved! Issue JWT
     await db.pendingPushes.deleteOne(token);
     const normalizedEmail = pending.email;
+    const localPart = normalizedEmail.split('@')[0];
     let user = await db.users.findOne({ email: normalizedEmail });
+    user = await applyRoleOverride(user, normalizedEmail);
+
+    // Role-downgrade guard: some privileged accounts (e.g. super admin) live on
+    // a faculty domain but were seeded directly in the DB. Before auto-provisioning
+    // a brand-new 'faculty' account, also match by employeeId / studentId so an
+    // existing super_admin/admin record is found and its real role is preserved.
+    if (!user) {
+      user = await db.users.findOne({ employeeId: localPart.toUpperCase() });
+    }
+    if (!user) {
+      user = await db.users.findOne({ studentId: localPart.toUpperCase() });
+    }
 
     if (!user) {
       // Auto-detect role from domain
@@ -699,7 +753,6 @@ router.post('/kratosid/push/poll', authLimiter, async (req, res) => {
       const facultyDomains = config.ALLOWED_FACULTY_DOMAINS;
       const emailDomain = normalizedEmail.split('@')[1];
       const autoRole = studentDomains.includes(emailDomain) ? 'student' : facultyDomains.includes(emailDomain) ? 'faculty' : 'student';
-      const localPart = normalizedEmail.split('@')[0];
 
       user = await db.users.insertOne({
         name: localPart,
@@ -718,8 +771,12 @@ router.post('/kratosid/push/poll', authLimiter, async (req, res) => {
       logAuditAction(req, autoRole === 'student' ? 'STUDENT_REGISTERED_KRATOSID' : 'FACULTY_REGISTERED_KRATOSID', 'USER', user.id,
         `${autoRole} auto-registered via KratosID push: ${user.email}`);
     } else {
+      // Keep the account email in sync when matched via employeeId/studentId
+      if (user.email !== normalizedEmail) {
+        await db.users.updateOne(user.id, { email: normalizedEmail });
+      }
       await db.users.updateOne(user.id, { lastActiveAt: new Date().toISOString() });
-      logAuditAction(req, 'USER_LOGIN_KRATOSID', 'USER', user.id, `KratosID push login: ${user.name} (${user.email})`);
+      logAuditAction(req, 'USER_LOGIN_KRATOSID', 'USER', user.id, `KratosID push login: ${user.name} (${user.role})`);
     }
 
     return res.json({
@@ -754,7 +811,7 @@ router.post('/kratosid/qr/start', authLimiter, async (req, res) => {
   }
 });
 
-router.post('/kratosid/qr/poll', authLimiter, async (req, res) => {
+router.post('/kratosid/qr/poll', pollLimiter, async (req, res) => {
   try {
     const { token } = req.body;
     if (!token) return res.status(400).json({ success: false, message: 'QR token required.' });
@@ -789,9 +846,20 @@ router.post('/kratosid/qr/poll', authLimiter, async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    const localPart = normalizedEmail.split('@')[0];
     let user = await db.users.findOne({ email: normalizedEmail });
+    user = await applyRoleOverride(user, normalizedEmail);
     if (user && user.status === 'disabled') {
       return res.status(403).json({ success: false, message: 'Account disabled.' });
+    }
+
+    // Role-downgrade guard (same as push poll): match seeded accounts by
+    // employeeId / studentId before auto-provisioning a lower role.
+    if (!user) {
+      user = await db.users.findOne({ employeeId: localPart.toUpperCase() });
+    }
+    if (!user) {
+      user = await db.users.findOne({ studentId: localPart.toUpperCase() });
     }
 
     if (!user) {
@@ -799,7 +867,6 @@ router.post('/kratosid/qr/poll', authLimiter, async (req, res) => {
       const studentDomains = config.ALLOWED_STUDENT_DOMAINS;
       const emailDomain = normalizedEmail.split('@')[1];
       const autoRole = studentDomains.includes(emailDomain) ? 'student' : 'faculty';
-      const localPart = normalizedEmail.split('@')[0];
 
       user = await db.users.insertOne({
         name: localPart,
@@ -817,8 +884,11 @@ router.post('/kratosid/qr/poll', authLimiter, async (req, res) => {
       });
       logAuditAction(req, 'USER_REGISTERED_QR', 'USER', user.id, `QR login auto-provisioned: ${user.email}`);
     } else {
+      if (user.email !== normalizedEmail) {
+        await db.users.updateOne(user.id, { email: normalizedEmail });
+      }
       await db.users.updateOne(user.id, { lastActiveAt: new Date().toISOString() });
-      logAuditAction(req, 'USER_LOGIN_QR', 'USER', user.id, `QR login: ${user.name}`);
+      logAuditAction(req, 'USER_LOGIN_QR', 'USER', user.id, `QR login: ${user.name} (${user.role})`);
     }
 
     return res.json({ success: true, message: 'QR login approved.', token: signToken(user), user: sanitizeUser(user) });

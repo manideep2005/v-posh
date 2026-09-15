@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useGoogleLogin } from '@react-oauth/google';
 import { QRCodeSVG } from 'qrcode.react';
 import { Lock, AlertCircle, Smartphone, QrCode, Mail } from 'lucide-react';
+import RateLimitAlert, { useRateLimited, toErrorState } from '../../components/RateLimitAlert';
 
 function GoogleIcon() {
   return (
@@ -19,6 +20,7 @@ function GoogleIcon() {
 export default function StudentLogin() {
   const [kratosEmail, setKratosEmail] = useState('');
   const [kratosState, setKratosState] = useState('idle'); // idle | waiting
+  const [pushCountdown, setPushCountdown] = useState(0);
   const [kratosTab, setKratosTab] = useState('push'); // push | qr
   const [qrData, setQrData] = useState(null);
   const [qrCountdown, setQrCountdown] = useState(0);
@@ -26,6 +28,7 @@ export default function StudentLogin() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const pollRef = useRef(null);
   const countdownRef = useRef(null);
+  const rateLimited = useRateLimited(error);
 
   const { kratosLogin, startPushLogin, pollPushLogin, startQrLogin, pollQrLogin } = useAuth();
   const navigate = useNavigate();
@@ -39,43 +42,56 @@ export default function StudentLogin() {
   }, []);
 
   // ── KratosID push auth (client-side polling) ──────────────
+  // Waits a full 90 seconds (matching QR) and tolerates transient poll
+  // errors — only definitive failures (denied / expired / rate-limit)
+  // stop the wait early.
   const handleKratosLogin = async (e) => {
     e.preventDefault();
     if (!kratosEmail) return;
     setError('');
     setKratosState('waiting');
+    setPushCountdown(90);
     try {
       const startRes = await startPushLogin(kratosEmail);
       const pushToken = startRes.token;
-      // Poll from client side every 2s (like QR flow)
-      let attempts = 0;
-      const maxAttempts = 45; // 90 seconds max
+      const startedAt = Date.now();
+      const WAIT_MS = 90 * 1000;
       pollRef.current = setInterval(async () => {
-        attempts++;
-        if (attempts >= maxAttempts) {
+        const elapsed = Date.now() - startedAt;
+        if (elapsed >= WAIT_MS) {
           clearInterval(pollRef.current);
           setKratosState('idle');
-          setError('Push authentication timed out. Please try again.');
+          setPushCountdown(0);
+          setError('Push authentication timed out after 90s. Please try again or use the QR Code tab.');
           return;
         }
+        setPushCountdown(Math.ceil((WAIT_MS - elapsed) / 1000));
         try {
           const user = await pollPushLogin(pushToken);
           if (user) {
             clearInterval(pollRef.current);
+            setPushCountdown(0);
             if (user.role === 'faculty') navigate('/faculty/dashboard');
             else if (user.role === 'admin') navigate('/admin/dashboard');
             else if (user.role === 'super_admin') navigate('/super-admin/dashboard');
             else navigate('/student/dashboard');
           }
         } catch (err) {
-          clearInterval(pollRef.current);
-          setKratosState('idle');
-          setError(err.message || 'Push authentication failed.');
+          const msg = (err && err.message) || '';
+          const definitive = err.isRateLimit || /denied|expired|not found|not registered|deactivated/i.test(msg);
+          if (definitive) {
+            clearInterval(pollRef.current);
+            setKratosState('idle');
+            setPushCountdown(0);
+            setError(toErrorState(err, 'Push authentication failed.'));
+          }
+          // Transient error — keep polling until the 90s cap
         }
       }, 2000);
     } catch (err) {
       setKratosState('idle');
-      setError(err.message || 'Failed to send push notification.');
+      setPushCountdown(0);
+      setError(toErrorState(err, 'Failed to send push notification.'));
     }
   };
 
@@ -110,6 +126,16 @@ export default function StudentLogin() {
           else if (user.role === 'super_admin') navigate('/super-admin/dashboard');
           else navigate('/student/dashboard');
         } catch (err) {
+          // A 429 while polling must stop the loop — hammering a rate-limited
+          // endpoint only extends the lockout.
+          if (err && err.isRateLimit) {
+            clearInterval(pollRef.current);
+            clearInterval(countdownRef.current);
+            setKratosState('idle');
+            setQrData(null);
+            setError(err);
+            return;
+          }
           if (err.message && (err.message.includes('timed out') || err.message.includes('denied') || err.message.includes('expired'))) {
             clearInterval(pollRef.current);
             clearInterval(countdownRef.current);
@@ -123,7 +149,7 @@ export default function StudentLogin() {
     } catch (err) {
       setKratosState('idle');
       setQrData(null);
-      setError(err.message || 'Failed to start QR login.');
+      setError(toErrorState(err, 'Failed to start QR login.'));
     }
   };
 
@@ -190,7 +216,12 @@ export default function StudentLogin() {
           </p>
         </div>
 
-        {error && (
+        {error && error.isRateLimit ? (
+          <RateLimitAlert
+            error={error}
+            onDismiss={() => setError('')}
+          />
+        ) : error && (
           <div className="alert alert-danger" style={{ marginBottom: '1.25rem' }}>
             <AlertCircle size={15} /><span>{error}</span>
           </div>
@@ -203,17 +234,6 @@ export default function StudentLogin() {
         }}>
           <div style={{ textAlign: 'center', marginBottom: '0.75rem' }}>
             <img src="/vit-ap-logo.png" alt="VIT-AP" style={{ height: 44, filter: 'brightness(1.3)' }} />
-          </div>
-          {/* Maintenance banner */}
-          <div style={{
-            marginBottom: '1rem', padding: '0.65rem 0.9rem',
-            backgroundColor: 'rgba(251,191,36,0.12)',
-            border: '1px solid rgba(251,191,36,0.4)',
-            borderRadius: '6px',
-            fontSize: '0.78rem', color: '#FCD34D', textAlign: 'center'
-          }}>
-            <strong>⚠️ We’re having issues with KratosID email authentication.</strong>
-            {' '}Use the <strong>QR Code</strong> tab or <strong>Google Sign-In</strong> below to log in.
           </div>
           {/* Tabs */}
           <div style={{ display: 'flex', gap: '4px', marginBottom: '1rem', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px' }}>
@@ -258,7 +278,7 @@ export default function StudentLogin() {
               />
               <button
                 type="submit"
-                disabled={kratosState === 'waiting' || !kratosEmail}
+                disabled={rateLimited || kratosState === 'waiting' || !kratosEmail}
                 style={{
                   width: '100%', padding: '0.65rem', borderRadius: '6px',
                   background: kratosState === 'waiting' ? 'rgba(94,234,212,0.2)' : '#14B8A6',
@@ -271,7 +291,7 @@ export default function StudentLogin() {
                 {kratosState === 'waiting' ? (
                   <>
                     <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '1rem' }}>⏳</span>
-                    Waiting for approval…
+                    Waiting for approval… {formatTime(pushCountdown)}
                   </>
                 ) : 'Send Push Notification'}
               </button>
@@ -349,7 +369,7 @@ export default function StudentLogin() {
         <button
           type="button"
           onClick={() => { setError(''); handleGoogleLogin(); }}
-          disabled={googleLoading || kratosState === 'waiting'}
+          disabled={googleLoading || rateLimited || kratosState === 'waiting'}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: '0.65rem', padding: '0.72rem 1rem',
