@@ -27,7 +27,7 @@ export default function StudentComplaints() {
     const url = action === 'delete'
       ? `/student/complaints/${complaintId}`
       : `/student/complaints/${complaintId}/pause`;
-    const res = await apiFetch(url, { method, body: { reason, email } });
+    const res = await apiFetch(url, { method, body: JSON.stringify({ reason, email }) });
     if (res.success) {
       setMsg(res.message);
       setModal({ open: false, action: null, complaintId: null, complaintRef: null });

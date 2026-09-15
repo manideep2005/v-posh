@@ -19,9 +19,9 @@ module.exports = {
   // KratosID passwordless auth
   KRATOSID_API_KEY: process.env.KRATOSID_API_KEY || '',
   KRATOSID_PRODUCT_ID: process.env.KRATOSID_PRODUCT_ID || '',
-  KRATOSID_BASE_URL: process.env.KRATOSID_BASE_URL || 'https://api-prod.kratosid.com',
+  KRATOSID_BASE_URL: process.env.KRATOSID_BASE_URL || 'https://api.kratosid.com',
   KRATOSID_APP_NAME: process.env.KRATOSID_APP_NAME || 'KratosID',
-  // Email (Gmail SMTP — use App Password, NOT account password)
+
   SMTP_USER: process.env.SMTP_USER || '',
   SMTP_PASS: process.env.SMTP_PASS || '',
   SMTP_FROM: process.env.SMTP_FROM || '',
