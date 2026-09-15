@@ -29,6 +29,7 @@ router.get('/student/complaints/:id/acknowledgement', authenticateToken, require
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
     res.send(buffer);
   } catch (err) {
     console.error('PDF generation error:', err);
@@ -63,6 +64,7 @@ router.get('/student/complaints/:id/status-report', authenticateToken, requireRo
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
     res.send(buffer);
   } catch (err) {
     console.error('PDF generation error:', err);
@@ -85,6 +87,7 @@ router.get('/admin/complaints/:id/acknowledgement', authenticateToken, requireRo
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
     res.send(buffer);
   } catch (err) {
     console.error('PDF generation error:', err);
@@ -109,6 +112,7 @@ router.get('/admin/complaints/:id/status-report', authenticateToken, requireRole
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
     res.send(buffer);
   } catch (err) {
     console.error('PDF generation error:', err);

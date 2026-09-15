@@ -38,7 +38,8 @@ const MONGO_COLLECTIONS = {
   auditLogs: 'audit_logs',
   departments: 'departments',
   categories: 'complaint_categories',
-  announcements: 'announcements'
+  announcements: 'announcements',
+  pendingPushes: 'pending_pushes'
 };
 
 const JSON_COLLECTION_KEYS = {

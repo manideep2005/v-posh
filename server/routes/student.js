@@ -247,7 +247,8 @@ router.get('/complaints-sla', async (req, res) => {
 });
 
 // ─── Pause Complaint (with reason + email confirmation security check) ─────────
-router.put('/complaints/:id/pause', async (req, res) => {
+// Accept both PUT and POST — PUT body may be stripped by some proxies
+async function pauseComplaintHandler(req, res) {
   try {
     const { reason, email } = req.body;
     if (!reason || reason.trim().length < 10) {
@@ -290,10 +291,13 @@ router.put('/complaints/:id/pause', async (req, res) => {
     console.error('Pause error:', err);
     res.status(500).json({ success: false, message: 'Failed to update complaint.' });
   }
-});
+}
+router.put('/complaints/:id/pause', pauseComplaintHandler);
+router.post('/complaints/:id/pause', pauseComplaintHandler);
 
 // ─── Delete Complaint (with reason + email confirmation security check) ────────
-router.delete('/complaints/:id', async (req, res) => {
+// Accept both DELETE and POST — DELETE body may be stripped by Vercel edge network
+async function deleteComplaintHandler(req, res) {
   try {
     const { reason, email } = req.body;
     if (!reason || reason.trim().length < 10) {
@@ -340,6 +344,8 @@ router.delete('/complaints/:id', async (req, res) => {
     console.error('Delete error:', err);
     res.status(500).json({ success: false, message: 'Failed to delete complaint.' });
   }
-});
+}
+router.delete('/complaints/:id', deleteComplaintHandler);
+router.post('/complaints/:id/delete', deleteComplaintHandler);
 
 module.exports = router;

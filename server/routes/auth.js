@@ -459,20 +459,27 @@ router.post('/google-access', authLimiter, async (req, res) => {
 //
 const { KratosIDClient, KratosIDError } = require('../../javascript/src/index.js');
 
-// Lazy singleton — created on first use so missing keys don't crash startup
+// Lazy singleton — recreated when env config changes.
 let _kratosClient = null;
+let _kratosClientKey = null;
 function getKratosClient() {
-  if (_kratosClient) return _kratosClient;
-  if (!config.KRATOSID_API_KEY || !config.KRATOSID_PRODUCT_ID) {
+  // Read directly from process.env so changes after startup are picked up
+  const apiKey = process.env.KRATOSID_API_KEY || config.KRATOSID_API_KEY;
+  const productId = process.env.KRATOSID_PRODUCT_ID || config.KRATOSID_PRODUCT_ID;
+  const baseUrl = process.env.KRATOSID_BASE_URL || config.KRATOSID_BASE_URL;
+  const appName = process.env.KRATOSID_APP_NAME || config.KRATOSID_APP_NAME;
+  const key = `${apiKey}:${productId}:${baseUrl}`;
+  if (_kratosClient && _kratosClientKey === key) return _kratosClient;
+  if (!apiKey || !productId) {
     throw new Error('KratosID is not configured. Set KRATOSID_API_KEY and KRATOSID_PRODUCT_ID.');
   }
   _kratosClient = new KratosIDClient({
-    apiKey: config.KRATOSID_API_KEY,
-    productId: config.KRATOSID_PRODUCT_ID,
-    appName: config.KRATOSID_APP_NAME,
-    // Use explicit baseUrl — overrides environment so the correct prod endpoint is hit
-    baseUrl: config.KRATOSID_BASE_URL,
+    apiKey,
+    productId,
+    appName,
+    baseUrl,
   });
+  _kratosClientKey = key;
   return _kratosClient;
 }
 
@@ -571,8 +578,8 @@ router.post('/kratosid/verify', authLimiter, async (req, res) => {
 //   1. POST /auth/kratosid/push/start  { email }  → sends push, returns request token (fast)
 //   2. POST /auth/kratosid/push/poll   { token, email }  → polls KratosID for approval
 
-// In-memory store for pending push requests (short-lived, cleared after auth)
-const pendingPushes = new Map();
+// Pending push requests stored via db module (survives Vercel serverless cold starts).
+// Each entry auto-expires after 2 minutes — checked at poll time.
 
 router.post('/kratosid/push/start', authLimiter, async (req, res) => {
   try {
@@ -614,11 +621,21 @@ router.post('/kratosid/push/start', authLimiter, async (req, res) => {
       throw kratosErr;
     }
 
-    // Store the push token with email for polling
-    pendingPushes.set(pushToken, { email: normalizedEmail, createdAt: Date.now() });
+    // Store the push token with email for polling (DB-backed, works on Vercel serverless)
+    await db.pendingPushes.insertOne({
+      id: pushToken,
+      email: normalizedEmail,
+      createdAt: new Date().toISOString()
+    });
 
-    // Auto-cleanup after 2 minutes
-    setTimeout(() => pendingPushes.delete(pushToken), 120000);
+    // Best-effort cleanup of stale entries (older than 3 minutes)
+    try {
+      const stale = new Date(Date.now() - 180000).toISOString();
+      const all = await db.pendingPushes.find({});
+      for (const p of all) {
+        if (p.createdAt && p.createdAt < stale) await db.pendingPushes.deleteOne(p.id);
+      }
+    } catch (_) { /* ignore cleanup errors */ }
 
     res.json({ success: true, token: pushToken, message: 'Push notification sent. Check your KratosID app.' });
   } catch (err) {
@@ -632,8 +649,13 @@ router.post('/kratosid/push/poll', authLimiter, async (req, res) => {
     const { token } = req.body;
     if (!token) return res.status(400).json({ success: false, message: 'Push token required.' });
 
-    const pending = pendingPushes.get(token);
+    let pending = await db.pendingPushes.findOne({ id: token });
     if (!pending) {
+      return res.status(404).json({ success: false, message: 'Push request expired or not found.' });
+    }
+    // Auto-expire entries older than 2 minutes
+    if (pending.createdAt && (Date.now() - new Date(pending.createdAt).getTime()) > 120000) {
+      await db.pendingPushes.deleteOne(token);
       return res.status(404).json({ success: false, message: 'Push request expired or not found.' });
     }
 
@@ -645,11 +667,11 @@ router.post('/kratosid/push/poll', authLimiter, async (req, res) => {
       return res.json({ success: false, approved: false, status: 'pending' });
     }
     if (status.startsWith('expired') || status === 'Authorization denied') {
-      pendingPushes.delete(token);
+      await db.pendingPushes.deleteOne(token);
       return res.json({ success: false, approved: false, status: 'denied', message: 'Push denied by user.' });
     }
     if (status.startsWith('Authorization timeout')) {
-      pendingPushes.delete(token);
+      await db.pendingPushes.deleteOne(token);
       return res.json({ success: false, approved: false, status: 'timeout', message: 'Push timed out.' });
     }
 
@@ -662,12 +684,12 @@ router.post('/kratosid/push/poll', authLimiter, async (req, res) => {
     } catch (_) {}
 
     if (!approved) {
-      pendingPushes.delete(token);
+      await db.pendingPushes.deleteOne(token);
       return res.json({ success: false, approved: false, status: 'unknown', message: 'Unexpected response from KratosID.' });
     }
 
     // Approved! Issue JWT
-    pendingPushes.delete(token);
+    await db.pendingPushes.deleteOne(token);
     const normalizedEmail = pending.email;
     let user = await db.users.findOne({ email: normalizedEmail });
 

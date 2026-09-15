@@ -90,7 +90,7 @@ class Doc {
         .lineWidth(0.5).strokeColor(COLORS.teal).stroke().restore();
 
       // Footer
-      const fy = this.H - this.M + 15;
+      const fy = this.H - this.M - 10;
       this.doc.save().moveTo(this.M, fy - 10).lineTo(this.W - this.M, fy - 10)
         .lineWidth(0.3).strokeColor(COLORS.slateMuted).stroke().restore();
       this.doc.font(F.regular).fontSize(6.5).fillColor(COLORS.slateLight)
@@ -289,6 +289,141 @@ async function generateStatusReport(complaint, user, history = [], updates = [])
   if (y > d.H - 120) { y = d.newPage(); }
   y = d.secTitle('ICC PROCEDURE & RULES & REGULATIONS', y);
   y = renderRulesBlock(d, y, complaint);
+
+  // ── PAGE 2+: POSH ACT GUIDELINES ──────────────────────────────────────
+  y = d.gap(40);
+  if (y > d.H - 150) { y = d.newPage(); }
+  y = d.secTitle('GUIDELINES UNDER THE POSH ACT, 2013', y);
+
+  const guidelines = [
+    {
+      heading: 'Section 4 — Constitution of Internal Complaints Committee',
+      body: 'Every employer having ten or more employees shall constitute an Internal Complaints Committee (ICC) at each office or branch. The ICC shall consist of a presiding officer who shall be a woman employed at a senior level, and not less than two members from amongst employees who are committed to the cause of women or who have experience in social work or have legal knowledge. One member shall be from a non-governmental organisation or association committed to the cause of women or a person familiar with issues relating to sexual harassment.',
+    },
+    {
+      heading: 'Section 6 — Powers of the ICC',
+      body: 'The ICC shall have the same powers as are vested in a civil court under the Code of Civil Procedure, 1908, when trying a suit, in respect of the following matters: summoning and examining any person on oath; requiring the discovery and production of documents; and any other matter which may be prescribed. The ICC shall prepare an annual report of the complaints received and the outcome of the inquiry and submit it to the employer.',
+    },
+    {
+      heading: 'Section 9 — Complaint of Sexual Harassment',
+      body: 'Any woman employed in an establishment may make a complaint of sexual harassment to the ICC within a period of three months from the date of the incident. In case of a series of incidents, within three months from the date of the last incident. The ICC may, for the reasons to be recorded in writing, extend the time limit by a further three months if it is satisfied that the circumstances were such which prevented the woman from filing the complaint.',
+    },
+    {
+      heading: 'Section 11 — Inquiry into Complaint',
+      body: 'Upon receipt of a complaint, the ICC shall proceed to make an inquiry in the manner prescribed. The ICC shall forward a copy of the complaint to the respondent within seven working days. The respondent shall file his written reply within ten working days from the receipt of the complaint. The inquiry shall be completed within ninety days from the receipt of the complaint. The ICC shall forward its inquiry report to the employer within ten days from the date of completion of the inquiry.',
+    },
+    {
+      heading: 'Section 13 — Inquiry Process',
+      body: 'The inquiry process shall follow principles of natural justice. Both the complainant and the respondent shall have the right to be accompanied by a support person of their choice during the proceedings. The proceedings shall be conducted in a fair and impartial manner. The identity of the complainant, respondent, and witnesses shall be kept confidential at all stages of the inquiry.',
+    },
+    {
+      heading: 'Section 14 — Penalties for Non-compliance',
+      body: 'Where the employer fails to constitute an Internal Complaints Committee under sub-section (1) of section 4, or defaults in constituting or reconstituting the ICC, or fails to take action under section 13, the employer shall be punishable with a fine of up to fifty thousand rupees. Any subsequent conviction shall be punishable with imprisonment of up to three years or with both. Repeated non-compliance may lead to cancellation of licence or registration.',
+    },
+    {
+      heading: 'Section 16 — Prohibition of Disclosure of Identity',
+      body: 'No person, including the ICC or any member thereof, the employer, any internal or external committee, the police, or any authority, shall publish or communicate or cause to be published or communicated, the identity and address of the complainant, the respondent, or the witnesses. Any person who contravenes this provision shall be liable for a penalty as may be prescribed under the Act.',
+    },
+    {
+      heading: "Section 19 \u2014 Employer's Duty to Display Notice",
+      body: 'Every employer shall at conspicuous places in the workplace, publish the penal consequences of sexual harassment and the order constituted under the ICC. The notice shall be in English and in the language understood at the place of work. The employer shall also forward a copy of the ICC composition and the ICC charter to the District Officer and shall also incorporate the same in the standing orders under the Industrial Employment (Standing Orders) Act, 1946.',
+    },
+    {
+      heading: "Section 22 \u2014 Employer's Responsibility",
+      body: 'It shall be the duty of the employer to provide a safe working environment to all employees. The employer shall ensure that the employees are provided with the necessary facilities as prescribed, including the constitution of the ICC, disclosure of penal consequences, and undertaking awareness programmes. The employer shall also ensure that no retaliation or adverse action is taken against the complainant or witnesses.',
+    },
+  ];
+
+  for (const g of guidelines) {
+    const estH = 20 + g.body.split(' ').length * 2.5;
+    if (y + estH > d.H - d.M - 30) { y = d.newPage(); }
+    d.doc.font(F.bold).fontSize(8).fillColor(COLORS.teal).text(g.heading, d.M, y, { width: d.cw, lineBreak: false });
+    y = d.doc.y + 3;
+    d.doc.font(F.regular).fontSize(7.5).fillColor(COLORS.navyLight).text(g.body, d.M, y, { width: d.cw, lineGap: 2 });
+    y = d.doc.y + 8;
+  }
+
+  // ── PAGE 3+: RIGHTS & REMEDIES ────────────────────────────────────────
+  y = d.gap(40);
+  if (y > d.H - 150) { y = d.newPage(); }
+  y = d.secTitle('RIGHTS OF THE COMPLAINANT & REMEDIES', y);
+
+  const rights = [
+    {
+      heading: 'Right to File a Complaint',
+      body: 'Any woman who has been subjected to sexual harassment at the workplace has the right to file a complaint with the ICC. The complaint may be filed in writing within three months of the incident. If the complainant is unable to make a complaint in writing, any member of the ICC shall render all reasonable assistance to make the complaint in writing. The ICC may also initiate suo motu proceedings if the complainant is unable to file a complaint due to any reason.',
+    },
+    {
+      heading: 'Right to Interim Relief',
+      body: 'Pending the completion of the inquiry, the ICC may recommend to the employer to implement the following interim measures: (a) Transfer of the complainant or the respondent to any other workplace; (b) Grant of leave to the complainant for a period of three months; (c) Restraint on the respondent from reporting any assessment or performance of the complainant; (d) Any other relief as may be appropriate under the circumstances.',
+    },
+    {
+      heading: 'Right to Compensation',
+      body: 'Where the ICC arrives at a conclusion that sexual harassment has taken place, it shall recommend to the employer that the respondent be liable to pay such compensation as may be determined. The compensation shall be paid to the complainant and shall take into account: (i) the mental pain, suffering, and emotional distress; (ii) loss in career opportunities; (iii) medical expenses incurred; (iv) the financial status of the respondent; and (v) the feasibility of payment of lump sum compensation.',
+    },
+    {
+      heading: 'Right Against Retaliation',
+      body: 'No woman shall be subjected to victimisation or retaliation for filing a complaint or participating in proceedings under the POSH Act. Any adverse action taken against the complainant, witness, or any person who assists in the complaint shall be treated as a separate violation. The employer shall ensure that no termination, demotion, or unfavourable transfer is made as a consequence of the complaint.',
+    },
+    {
+      heading: 'Right to Conciliation',
+      body: 'Before the commencement of the inquiry, the ICC may, at the request of the complainant, attempt to settle the matter through conciliation. The settlement arrived at through conciliation shall be signed by the complainant and the respondent and shall be forwarded to the employer. No monetary settlement shall be made as a basis for conciliation. If conciliation fails, the ICC shall proceed with the inquiry.',
+    },
+    {
+      heading: 'Right to an Appeal',
+      body: 'Either party aggrieved by the outcome of the inquiry or any recommendation of the ICC may prefer an appeal to the court or tribunal in accordance with the provisions of the service rules applicable or the Industrial Disputes Act, 1947. The appeal shall be filed within ninety days of the recommendation.',
+    },
+  ];
+
+  for (const r of rights) {
+    const estH = 20 + r.body.split(' ').length * 2.5;
+    if (y + estH > d.H - d.M - 30) { y = d.newPage(); }
+    d.doc.font(F.bold).fontSize(8).fillColor(COLORS.teal).text(r.heading, d.M, y, { width: d.cw, lineBreak: false });
+    y = d.doc.y + 3;
+    d.doc.font(F.regular).fontSize(7.5).fillColor(COLORS.navyLight).text(r.body, d.M, y, { width: d.cw, lineGap: 2 });
+    y = d.doc.y + 8;
+  }
+
+  // ── PAGE: EMPLOYER OBLIGATIONS & INSTITUTIONAL POLICY ─────────────────
+  y = d.gap(40);
+  if (y > d.H - 150) { y = d.newPage(); }
+  y = d.secTitle('EMPLOYER OBLIGATIONS & INSTITUTIONAL POLICY', y);
+
+  const obligations = [
+    {
+      heading: 'Workplace Definition (Section 2(n))',
+      body: 'For the purposes of the POSH Act, "workplace" includes any place visited by the employee arising out of or during the course of employment, including transportation provided by the employer for commuting to and from the place of employment. It covers educational institutions, hospitals, sports institutions, and any other place where the employer has control or influence.',
+    },
+    {
+      heading: 'Annual Reporting Requirement',
+      body: 'Every employer shall prepare an annual report as prescribed under Section 21 of the POSH Act and submit it to the District Officer. The report shall contain: (a) the number of complaints of sexual harassment received; (b) the number of complaints disposed of; (c) the number of cases pending for more than ninety days; and (d) the number of workshops or awareness programmes conducted. The employer shall also make the annual report available to all employees.',
+    },
+    {
+      heading: 'Mandatory Training & Awareness',
+      body: 'The employer shall organise regular workshops and awareness programmes at regular intervals to sensitise employees about the provisions of the POSH Act and the penal consequences. Such programmes shall be conducted for all employees including senior management, the ICC members, and contract workers. The training shall cover the definition of sexual harassment, the complaint procedure, and the duties of the ICC.',
+    },
+    {
+      heading: 'Internal Policy Requirements',
+      body: 'The institution shall formulate and continuously update a comprehensive anti-sexual harassment policy. The policy shall include: (a) a clear definition of sexual harassment with examples; (b) the procedure for filing and processing complaints; (c) the composition and role of the ICC; (d) the measures for prevention; (e) the disciplinary action for perpetrators; (f) the protection mechanisms for complainants and witnesses; and (g) the consequences of false or malicious complaints.',
+    },
+    {
+      heading: 'V-POSH Platform Commitment',
+      body: 'V-POSH (VIT-AP Prevention of Sexual Harassment) is the institutional digital platform of VIT-AP University designed to facilitate the reporting, tracking, and redressal of sexual harassment complaints in full compliance with the POSH Act, 2013 and the UGC (Prevention, Prohibition and Redressal of Sexual Harassment of Women Students and Employees in Higher Educational Institutions) Regulations, 2015. This platform ensures confidentiality, transparency, and timely resolution of all complaints.',
+    },
+    {
+      heading: 'Contact & Emergency Helpline',
+      body: 'In case of emergency or for immediate assistance, the following resources are available:\nV-POSH Cell Email: vposh@vitap.ac.in\nEmergency Helpline: +91 863-2377777 / 1800-112-9900\nPOSH Policy Version: V-POSH Policy v2026.1\nInstitution: VIT-AP University, Amaravati, Andhra Pradesh\nFor more information, visit: https://vposh.vitap.ac.in/awareness',
+    },
+  ];
+
+  for (const ob of obligations) {
+    const estH = 20 + ob.body.split(' ').length * 2.5;
+    if (y + estH > d.H - d.M - 30) { y = d.newPage(); }
+    d.doc.font(F.bold).fontSize(8).fillColor(COLORS.teal).text(ob.heading, d.M, y, { width: d.cw, lineBreak: false });
+    y = d.doc.y + 3;
+    d.doc.font(F.regular).fontSize(7.5).fillColor(COLORS.navyLight).text(ob.body, d.M, y, { width: d.cw, lineGap: 2 });
+    y = d.doc.y + 8;
+  }
 
   // Confidentiality
   if (!addSectionToPage(d, y, 70)) { y = d.newPage(); }

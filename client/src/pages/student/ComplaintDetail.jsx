@@ -21,13 +21,17 @@ function PDFDownloadButton({ complaintId, type, label }) {
       if (!res.ok) throw new Error('Download failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
+      const filename = res.headers.get('content-disposition')?.split('filename="')[1]?.replace('"', '') || `VPOSH_${type}.pdf`;
       const a = document.createElement('a');
       a.href = url;
-      a.download = res.headers.get('content-disposition')?.split('filename="')[1]?.replace('"', '') || `VPOSH_${type}.pdf`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Delay revoking so the browser has time to start the download
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1000);
     } catch (err) {
       alert('Failed to download PDF.');
     } finally {
