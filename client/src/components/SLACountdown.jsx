@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Clock, AlertTriangle, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const STATUS_CONFIG = {
-  'on-track': { color: '#10B981', bg: '#D1FAE5', icon: Clock, label: 'On Track' },
-  'warning': { color: '#F59E0B', bg: '#FEF3C7', icon: AlertCircle, label: 'Approaching Deadline' },
-  'critical': { color: '#EF4444', bg: '#FEE2E2', icon: AlertTriangle, label: 'Critical' },
-  'breached': { color: '#DC2626', bg: '#FECACA', icon: AlertTriangle, label: 'SLA Breached' },
-  'completed': { color: '#10B981', bg: '#D1FAE5', icon: CheckCircle2, label: 'Resolved' },
+  'on-track': { color: '#0F766E', bg: '#F8FAFC', icon: Clock, label: 'On Track' },
+  'warning': { color: '#92400E', bg: '#FFFBEB', icon: AlertCircle, label: 'Approaching Deadline' },
+  'critical': { color: '#991B1B', bg: '#FFF1F2', icon: AlertTriangle, label: 'Critical' },
+  'breached': { color: '#991B1B', bg: '#FEF2F2', icon: AlertTriangle, label: 'SLA Breached' },
+  'completed': { color: '#0F766E', bg: '#F0FDFA', icon: CheckCircle2, label: 'Resolved' },
 };
 
 export default function SLACountdown({ sla }) {
@@ -63,7 +63,7 @@ export default function SLACountdown({ sla }) {
           <div style={{
             height: '100%', borderRadius: 2, transition: 'width 1s ease',
             width: `${Math.min(100, sla.pctUsed || 0)}%`,
-            background: sla.pctUsed > 90 ? '#DC2626' : sla.pctUsed > 70 ? '#F59E0B' : config.color,
+            background: sla.pctUsed > 90 ? '#991B1B' : sla.pctUsed > 70 ? '#92400E' : config.color,
           }} />
         </div>
       </div>

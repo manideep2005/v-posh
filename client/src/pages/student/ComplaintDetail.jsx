@@ -23,7 +23,7 @@ function PDFDownloadButton({ complaintId, type, label }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = res.headers.get('content-displacement')?.split('filename="')[1]?.replace('"', '') || `VPOSH_${type}.pdf`;
+      a.download = res.headers.get('content-disposition')?.split('filename="')[1]?.replace('"', '') || `VPOSH_${type}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

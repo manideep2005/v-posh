@@ -23,11 +23,11 @@ export default function StudentComplaints() {
 
   const handleModalConfirm = async ({ reason, email }) => {
     const { action, complaintId } = modal;
-    const method = action === 'delete' ? 'DELETE' : 'PUT';
+    // Use POST for both pause and delete — Vercel edge may strip DELETE/PUT bodies
     const url = action === 'delete'
-      ? `/student/complaints/${complaintId}`
+      ? `/student/complaints/${complaintId}/delete`
       : `/student/complaints/${complaintId}/pause`;
-    const res = await apiFetch(url, { method, body: JSON.stringify({ reason, email }) });
+    const res = await apiFetch(url, { method: 'POST', body: JSON.stringify({ reason, email }) });
     if (res.success) {
       setMsg(res.message);
       setModal({ open: false, action: null, complaintId: null, complaintRef: null });

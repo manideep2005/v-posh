@@ -201,6 +201,9 @@ export default function StudentLogin() {
           background: 'var(--color-navy-900)', borderRadius: '8px',
           padding: '1.25rem', marginBottom: '1rem'
         }}>
+          <div style={{ textAlign: 'center', marginBottom: '0.75rem' }}>
+            <img src="/vit-ap-logo.png" alt="VIT-AP" style={{ height: 44, filter: 'brightness(1.3)' }} />
+          </div>
           {/* Maintenance banner */}
           <div style={{
             marginBottom: '1rem', padding: '0.65rem 0.9rem',

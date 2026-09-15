@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useGoogleLogin } from '@react-oauth/google';
-import { Shield, AlertCircle, Smartphone, QrCode, Mail } from 'lucide-react';
+import { Shield, AlertCircle, Smartphone, QrCode, Mail, KeyRound } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 function GoogleIcon() {
@@ -26,7 +26,10 @@ export default function SuperAdminLogin() {
   const [qrCountdown, setQrCountdown] = useState(0);
   const pollRef = useRef(null);
   const countdownRef = useRef(null);
-  const { kratosLogin, startPushLogin, pollPushLogin, startQrLogin, pollQrLogin } = useAuth();
+  const [pwEmail, setPwEmail] = useState('');
+  const [pwPassword, setPwPassword] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+  const { kratosLogin, startPushLogin, pollPushLogin, startQrLogin, pollQrLogin, login } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -91,6 +94,20 @@ export default function SuperAdminLogin() {
 
   const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
+  const handlePasswordLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setPwLoading(true);
+    try {
+      const user = await login(pwEmail, pwPassword, 'super_admin');
+      if (user) navigate('/super-admin/dashboard');
+    } catch (err) {
+      setError(err.message || 'Login failed. Check your credentials.');
+    } finally {
+      setPwLoading(false);
+    }
+  };
+
   const handleGoogleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       setGoogleLoading(true); setError('');
@@ -129,6 +146,9 @@ export default function SuperAdminLogin() {
 
         {/* KratosID Section */}
         <div style={{ background: 'var(--color-navy-900)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1rem' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+            <img src="/vit-ap-logo.png" alt="VIT-AP" style={{ height: 48, marginBottom: '0.5rem', filter: 'brightness(1.3)' }} />
+          </div>
           {/* Maintenance banner */}
           <div style={{
             marginBottom: '1rem', padding: '0.65rem 0.9rem',
@@ -141,11 +161,14 @@ export default function SuperAdminLogin() {
             {' '}Use the <strong>QR Code</strong> tab or <strong>Google Sign-In</strong> below to log in.
           </div>
           <div style={{ display: 'flex', gap: '4px', marginBottom: '1rem', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px' }}>
-            <button onClick={() => { setAuthTab('push'); cancelQR(); setError(''); }} style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8125rem', fontWeight: '600', fontFamily: 'inherit', background: authTab === 'push' ? 'rgba(94,234,212,0.2)' : 'transparent', color: authTab === 'push' ? '#5EEAD4' : '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-              <Mail size={14} /> Push
+            <button onClick={() => { setAuthTab('push'); cancelQR(); setError(''); }} style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '600', fontFamily: 'inherit', background: authTab === 'push' ? 'rgba(94,234,212,0.2)' : 'transparent', color: authTab === 'push' ? '#5EEAD4' : '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+              <Mail size={13} /> Push
             </button>
-            <button onClick={() => { setAuthTab('qr'); setKratosState('idle'); setError(''); }} style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8125rem', fontWeight: '600', fontFamily: 'inherit', background: authTab === 'qr' ? 'rgba(94,234,212,0.2)' : 'transparent', color: authTab === 'qr' ? '#5EEAD4' : '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-              <QrCode size={14} /> QR Code
+            <button onClick={() => { setAuthTab('qr'); setKratosState('idle'); setError(''); }} style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '600', fontFamily: 'inherit', background: authTab === 'qr' ? 'rgba(94,234,212,0.2)' : 'transparent', color: authTab === 'qr' ? '#5EEAD4' : '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+              <QrCode size={13} /> QR Code
+            </button>
+            <button onClick={() => { setAuthTab('password'); cancelQR(); setError(''); }} style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '600', fontFamily: 'inherit', background: authTab === 'password' ? 'rgba(94,234,212,0.2)' : 'transparent', color: authTab === 'password' ? '#5EEAD4' : '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+              <KeyRound size={13} /> Password
             </button>
           </div>
 
@@ -178,6 +201,16 @@ export default function SuperAdminLogin() {
                 </>
               )}
             </div>
+          )}
+
+          {authTab === 'password' && (
+            <form onSubmit={handlePasswordLogin}>
+              <input type="email" className="form-control" placeholder="admin-email@vitap.ac.in" value={pwEmail} onChange={e => { setPwEmail(e.target.value); setError(''); }} required disabled={pwLoading} style={{ marginBottom: '0.65rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+              <input type="password" className="form-control" placeholder="Password" value={pwPassword} onChange={e => { setPwPassword(e.target.value); setError(''); }} required disabled={pwLoading} style={{ marginBottom: '0.65rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+              <button type="submit" disabled={pwLoading || !pwEmail || !pwPassword} style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: pwLoading ? 'rgba(94,234,212,0.2)' : '#8B5CF6', color: '#fff', fontWeight: '700', fontSize: '0.9rem', border: 'none', cursor: pwLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                <KeyRound size={15} /> {pwLoading ? 'Signing in…' : 'Sign In with Password'}
+              </button>
+            </form>
           )}
         </div>
 
