@@ -4,8 +4,33 @@ const bcrypt = require('bcryptjs');
 const config = require('./config');
 const db = require('./db');
 
+// This script WIPES users, complaints, updates, history, attachments,
+// notifications and audit logs. It must never run against production by
+// accident, and it must never leave fabricated demo content behind there.
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+const FORCE = process.argv.includes('--force');
+const WITH_SAMPLES = process.argv.includes('--demo') || !IS_PRODUCTION;
+
+function printCredentials() {
+  if (!WITH_SAMPLES) return;
+  console.log('--- DEFAULT CREDENTIALS ---');
+  console.log('Super Admin : superadmin@vitap.ac.in / SuperAdmin123!');
+  console.log('Admin       : presiding.officer@vitap.ac.in / Admin123!');
+  console.log('Student     : student@student.vitap.ac.in / Student123!');
+  console.log('---------------------------');
+}
+
 async function seed() {
   console.log('Seeding POSH Platform database...');
+
+  if (IS_PRODUCTION && !FORCE) {
+    console.error('Refusing to seed: this environment reports as production.');
+    console.error('Seeding DELETES all users, complaints, history and audit logs.');
+    console.error('If this really is a throwaway/demo database, re-run with --force');
+    console.error('(add --demo to also create sample complaints instead of accounts only).');
+    process.exit(1);
+  }
+
   await db.initDb();
 
   // Clear existing data for a clean provisioning run
@@ -86,6 +111,17 @@ async function seed() {
     status: 'active',
     lastActiveAt: new Date().toISOString()
   });
+
+  // Sample complaints, demo notifications and the seed audit entry are demo
+  // content. Production seeding provisions accounts + institutional defaults
+  // only, so fabricated cases never reach a live committee.
+  if (!WITH_SAMPLES) {
+    console.log('Accounts and institutional defaults provisioned.');
+    console.log('Sample complaints skipped (production mode) — pass --demo to include them.');
+    printCredentials();
+    await db.closeDb();
+    return;
+  }
 
   // 4. Sample Complaints
   const complaint1 = await db.complaints.insertOne({
@@ -219,11 +255,7 @@ async function seed() {
   });
 
   console.log('Seeding completed successfully!');
-  console.log('--- DEFAULT CREDENTIALS ---');
-  console.log('Super Admin : superadmin@vitap.ac.in / SuperAdmin123!');
-  console.log('Admin       : presiding.officer@vitap.ac.in / Admin123!');
-  console.log('Student     : student@student.vitap.ac.in / Student123!');
-  console.log('---------------------------');
+  printCredentials();
 
   await db.closeDb();
 }

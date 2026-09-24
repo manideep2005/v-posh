@@ -14,7 +14,8 @@ router.get('/student/complaints/:id/acknowledgement', authenticateToken, require
     if (!complaint) return res.status(404).json({ success: false, message: 'Complaint not found.' });
     if (complaint.userId !== req.user.id) return res.status(403).json({ success: false, message: 'Forbidden.' });
 
-    const { buffer, docId, verifyToken, filename } = await generateAcknowledgement(complaint, req.user);
+    const viewer = { name: req.user.name, role: req.user.role };
+    const { buffer, docId, verifyToken, filename } = await generateAcknowledgement(complaint, req.user, viewer);
 
     storeDocument(docId, {
       docId,
@@ -49,7 +50,8 @@ router.get('/student/complaints/:id/status-report', authenticateToken, requireRo
     const allUpdates = await db.complaintUpdates.find({ complaintId: complaint.id });
     const publicUpdates = allUpdates.filter(u => u.isPublic).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
-    const { buffer, docId, verifyToken, filename } = await generateStatusReport(complaint, req.user, history, publicUpdates);
+    const viewer = { name: req.user.name, role: req.user.role };
+    const { buffer, docId, verifyToken, filename } = await generateStatusReport(complaint, req.user, history, publicUpdates, viewer);
 
     storeDocument(docId, {
       docId,
@@ -80,7 +82,7 @@ router.get('/admin/complaints/:id/acknowledgement', authenticateToken, requireRo
     if (!complaint) return res.status(404).json({ success: false, message: 'Complaint not found.' });
 
     const user = await db.users.findById(complaint.userId);
-    const { buffer, docId, verifyToken, filename } = await generateAcknowledgement(complaint, user);
+    const { buffer, docId, verifyToken, filename } = await generateAcknowledgement(complaint, user, { name: req.user.name, role: req.user.role });
 
     storeDocument(docId, { docId, type: 'acknowledgement', complaintId: complaint.id, complaintRef: complaint.referenceId, generatedBy: req.user.id, verifyToken });
     logAuditAction(req, 'PDF_GENERATED', 'COMPLAINT', complaint.id, `Admin generated acknowledgement PDF: ${docId}`);
@@ -105,10 +107,73 @@ router.get('/admin/complaints/:id/status-report', authenticateToken, requireRole
     const allUpdates = await db.complaintUpdates.find({ complaintId: complaint.id });
     const publicUpdates = allUpdates.filter(u => u.isPublic).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
-    const { buffer, docId, verifyToken, filename } = await generateStatusReport(complaint, user, history, publicUpdates);
+    const { buffer, docId, verifyToken, filename } = await generateStatusReport(complaint, user, history, publicUpdates, { name: req.user.name, role: req.user.role });
 
     storeDocument(docId, { docId, type: 'status-report', complaintId: complaint.id, complaintRef: complaint.referenceId, generatedBy: req.user.id, verifyToken });
     logAuditAction(req, 'PDF_GENERATED', 'COMPLAINT', complaint.id, `Admin generated status report PDF: ${docId}`);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (err) {
+    console.error('PDF generation error:', err);
+    res.status(500).json({ success: false, message: 'Failed to generate PDF.' });
+  }
+});
+
+// ─── Faculty PDF Routes ──────────────────────────────────────────────────────
+// Faculty may export only cases raised by students of their own department, the
+// same scope the /faculty/complaints/:id endpoint already enforces.
+
+async function findDepartmentComplaint(req, res) {
+  const complaint = await db.complaints.findOne(c => c.id === req.params.id || c.referenceId === req.params.id);
+  if (!complaint) {
+    res.status(404).json({ success: false, message: 'Complaint not found.' });
+    return null;
+  }
+  if (complaint.studentDept !== req.user.department) {
+    res.status(403).json({ success: false, message: 'This case belongs to another department.' });
+    return null;
+  }
+  return complaint;
+}
+
+router.get('/faculty/complaints/:id/acknowledgement', authenticateToken, requireRole(['faculty']), async (req, res) => {
+  try {
+    const complaint = await findDepartmentComplaint(req, res);
+    if (!complaint) return;
+
+    const user = await db.users.findById(complaint.userId);
+    const { buffer, docId, verifyToken, filename } = await generateAcknowledgement(complaint, user, { name: req.user.name, role: req.user.role });
+
+    storeDocument(docId, { docId, type: 'acknowledgement', complaintId: complaint.id, complaintRef: complaint.referenceId, generatedBy: req.user.id, verifyToken });
+    logAuditAction(req, 'PDF_GENERATED', 'COMPLAINT', complaint.id, `Faculty generated acknowledgement PDF: ${docId}`);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (err) {
+    console.error('PDF generation error:', err);
+    res.status(500).json({ success: false, message: 'Failed to generate PDF.' });
+  }
+});
+
+router.get('/faculty/complaints/:id/status-report', authenticateToken, requireRole(['faculty']), async (req, res) => {
+  try {
+    const complaint = await findDepartmentComplaint(req, res);
+    if (!complaint) return;
+
+    const user = await db.users.findById(complaint.userId);
+    const history = (await db.statusHistory.find({ complaintId: complaint.id })).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const allUpdates = await db.complaintUpdates.find({ complaintId: complaint.id });
+    const publicUpdates = allUpdates.filter(u => u.isPublic).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    const { buffer, docId, verifyToken, filename } = await generateStatusReport(complaint, user, history, publicUpdates, { name: req.user.name, role: req.user.role });
+
+    storeDocument(docId, { docId, type: 'status-report', complaintId: complaint.id, complaintRef: complaint.referenceId, generatedBy: req.user.id, verifyToken });
+    logAuditAction(req, 'PDF_GENERATED', 'COMPLAINT', complaint.id, `Faculty generated status report PDF: ${docId}`);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

@@ -25,8 +25,8 @@ export default function ConfirmActionModal({ isOpen, onClose, onConfirm, action,
     ? `You are about to permanently delete complaint ${complaintRef}. This action cannot be undone.`
     : `You are about to pause complaint ${complaintRef}. You can resume it later.`;
   const dangerColor = isDelete ? '#DC2626' : '#D97706';
-  const dangerBg = isDelete ? '#FEF2F2' : '#FFFBEB';
-  const dangerBorder = isDelete ? '#FECACA' : '#FDE68A';
+  const dangerBg = isDelete ? 'var(--color-crimson-50)' : 'var(--color-amber-50)';
+  const dangerBorder = isDelete ? 'var(--border-crimson)' : 'var(--border-amber)';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -62,8 +62,8 @@ export default function ConfirmActionModal({ isOpen, onClose, onConfirm, action,
       background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)',
     }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{
-        background: '#fff', borderRadius: 12, width: '100%', maxWidth: 440,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden',
+        background: 'var(--color-slate-100)', border: '1px solid var(--color-slate-200)', borderRadius: 12, width: '100%', maxWidth: 440,
+        boxShadow: '0 16px 44px rgba(0,0,0,0.18)', overflow: 'hidden',
         animation: 'modalSlide 0.2s ease-out',
       }}>
         <style>{`@keyframes modalSlide { from { opacity:0; transform: translateY(-8px); } to { opacity:1; transform: translateY(0); } }`}</style>
@@ -81,13 +81,13 @@ export default function ConfirmActionModal({ isOpen, onClose, onConfirm, action,
               <AlertTriangle size={18} color="#fff" />
             </div>
             <div>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0F172A', margin: 0 }}>{title}</h3>
-              <p style={{ fontSize: '0.75rem', color: '#64748B', margin: 0 }}>{complaintRef}</p>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-navy-900)', margin: 0 }}>{title}</h3>
+              <p style={{ fontSize: '0.75rem', color: 'var(--color-slate-600)', margin: 0 }}>{complaintRef}</p>
             </div>
           </div>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-            borderRadius: 6, display: 'flex', color: '#94A3B8',
+            borderRadius: 6, display: 'flex', color: 'var(--color-slate-400)',
           }}>
             <X size={18} />
           </button>
@@ -95,13 +95,13 @@ export default function ConfirmActionModal({ isOpen, onClose, onConfirm, action,
 
         {/* Body */}
         <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
-          <p style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.5, marginBottom: '1.25rem' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-navy-700)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
             {description}
           </p>
 
           {/* Reason */}
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#0F172A', marginBottom: '0.35rem' }}>
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-navy-900)', marginBottom: '0.35rem' }}>
               Reason <span style={{ color: '#DC2626' }}>*</span>
             </label>
             <textarea
@@ -119,14 +119,14 @@ export default function ConfirmActionModal({ isOpen, onClose, onConfirm, action,
               onFocus={(e) => e.target.style.borderColor = '#0D9488'}
               onBlur={(e) => e.target.style.borderColor = '#E2E8F0'}
             />
-            <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '0.2rem' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--color-slate-400)', marginTop: '0.2rem' }}>
               Minimum 10 characters. This will be recorded in the audit log.
             </div>
           </div>
 
           {/* Security Check — Email Confirmation */}
           <div style={{ marginBottom: '1.25rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 600, color: '#0F172A', marginBottom: '0.35rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-navy-900)', marginBottom: '0.35rem' }}>
               <ShieldCheck size={14} color="#0D9488" /> Security Verification <span style={{ color: '#DC2626' }}>*</span>
             </label>
             <input
@@ -144,7 +144,7 @@ export default function ConfirmActionModal({ isOpen, onClose, onConfirm, action,
               onFocus={(e) => e.target.style.borderColor = '#0D9488'}
               onBlur={(e) => e.target.style.borderColor = '#E2E8F0'}
             />
-            <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '0.2rem' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--color-slate-400)', marginTop: '0.2rem' }}>
               Enter your registered email address to authorize this action.
             </div>
           </div>
@@ -153,7 +153,7 @@ export default function ConfirmActionModal({ isOpen, onClose, onConfirm, action,
           {error && (
             <div style={{
               padding: '0.6rem 0.75rem', borderRadius: 8, marginBottom: '1rem',
-              background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B',
+              background: 'var(--color-crimson-50)', border: '1px solid var(--border-crimson)', color: 'var(--text-crimson-strong)',
               fontSize: '0.8rem', fontWeight: 500,
             }}>
               {error}
@@ -164,8 +164,8 @@ export default function ConfirmActionModal({ isOpen, onClose, onConfirm, action,
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
             <button type="button" onClick={onClose} style={{
               padding: '0.55rem 1rem', borderRadius: 8, border: '1px solid #E2E8F0',
-              background: '#fff', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-              fontFamily: 'inherit', color: '#475569',
+              background: 'var(--color-slate-100)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'inherit', color: 'var(--color-navy-700)',
             }}>
               Cancel
             </button>

@@ -160,23 +160,23 @@ export default function SuperAdminLogin() {
         ) : error && <div className="alert alert-danger" style={{ marginBottom: '1.25rem' }}><AlertCircle size={15} /><span>{error}</span></div>}
 
         {/* KratosID Section */}
-        <div style={{ background: 'var(--color-navy-900)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1rem' }}>
+        <div style={{ background: 'var(--color-slate-100)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1rem', border: '1px solid var(--color-slate-200)' }}>
           <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
             <img src="/vit-ap-logo.png" alt="VIT-AP" style={{ height: 48, marginBottom: '0.5rem', filter: 'brightness(1.3)' }} />
           </div>
           <div style={{ display: 'flex', gap: '4px', marginBottom: '1rem', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px' }}>
-            <button onClick={() => { setAuthTab('push'); cancelQR(); setError(''); }} style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '600', fontFamily: 'inherit', background: authTab === 'push' ? 'rgba(94,234,212,0.2)' : 'transparent', color: authTab === 'push' ? '#5EEAD4' : '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+            <button onClick={() => { setAuthTab('push'); cancelQR(); setError(''); }} style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '600', fontFamily: 'inherit', background: authTab === 'push' ? 'var(--tint-emerald)' : 'transparent', color: authTab === 'push' ? 'var(--text-teal-strong)' : 'var(--color-slate-500)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
               <Mail size={13} /> Push
             </button>
-            <button onClick={() => { setAuthTab('qr'); setKratosState('idle'); setError(''); }} style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '600', fontFamily: 'inherit', background: authTab === 'qr' ? 'rgba(94,234,212,0.2)' : 'transparent', color: authTab === 'qr' ? '#5EEAD4' : '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+            <button onClick={() => { setAuthTab('qr'); setKratosState('idle'); setError(''); }} style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '600', fontFamily: 'inherit', background: authTab === 'qr' ? 'var(--tint-emerald)' : 'transparent', color: authTab === 'qr' ? 'var(--text-teal-strong)' : 'var(--color-slate-500)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
               <QrCode size={13} /> QR Code
             </button>
           </div>
 
           {authTab === 'push' && (
             <form onSubmit={handleKratosLogin}>
-              <input type="email" className="form-control" placeholder="your-email@vitap.ac.in" value={kratosEmail} onChange={e => { setKratosEmail(e.target.value); setError(''); }} required disabled={kratosState === 'waiting'} style={{ marginBottom: '0.65rem', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
-              <button type="submit" disabled={rateLimited || kratosState === 'waiting' || !kratosEmail} style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: kratosState === 'waiting' ? 'rgba(94,234,212,0.2)' : '#14B8A6', color: '#fff', fontWeight: '700', fontSize: '0.9rem', border: 'none', cursor: kratosState === 'waiting' ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <input type="email" className="form-control" placeholder="your-email@vitap.ac.in" value={kratosEmail} onChange={e => { setKratosEmail(e.target.value); setError(''); }} required disabled={kratosState === 'waiting'} style={{ marginBottom: '0.65rem' }} />
+              <button type="submit" disabled={rateLimited || kratosState === 'waiting' || !kratosEmail} className="btn btn-primary" style={{ width: '100%', padding: '0.65rem', fontWeight: '700', fontSize: '0.9rem', cursor: kratosState === 'waiting' ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                 {kratosState === 'waiting' ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⏳</span> Waiting for approval… {formatTime(pushCountdown)}</> : 'Send Push Notification'}
               </button>
             </form>
@@ -186,19 +186,18 @@ export default function SuperAdminLogin() {
             <div style={{ textAlign: 'center' }}>
               {!qrData ? (
                 <>
-                  <p style={{ fontSize: '0.8125rem', color: '#94A3B8', marginBottom: '1rem' }}>Scan a QR code with your KratosID mobile app.</p>
-                  <button onClick={handleStartQR} style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: '#14B8A6', color: '#fff', fontWeight: '700', fontSize: '0.9rem', border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><QrCode size={16} /> Generate QR Code</button>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-slate-500)', marginBottom: '1rem' }}>Scan a QR code with your KratosID mobile app.</p>
+                  <button onClick={handleStartQR} className="btn btn-primary" style={{ width: '100%', padding: '0.65rem', fontWeight: '700', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><QrCode size={16} /> Generate QR Code</button>
                 </>
               ) : (
                 <>
-                  <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', display: 'inline-block', marginBottom: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}><QRCodeSVG value={qrData.qrPayload} size={180} level="M" /></div>
-                  <div style={{ fontSize: '0.8125rem', color: '#93C5FD', marginBottom: '0.5rem' }}>Scan with your <strong style={{ color: '#fff' }}>KratosID app</strong></div>
-                  <div style={{ fontSize: '0.875rem', fontWeight: '700', color: qrCountdown < 15 ? '#FCA5A5' : '#5EEAD4', marginBottom: '0.75rem', fontFamily: 'monospace' }}>{formatTime(qrCountdown)}</div>
+                  <div style={{ background: 'var(--color-slate-50)', borderRadius: '12px', padding: '1.25rem', display: 'inline-block', marginBottom: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}><QRCodeSVG value={qrData.qrPayload} size={180} level="M" /></div>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-blue-strong)', marginBottom: '0.5rem' }}>Scan with your <strong style={{ color: 'var(--color-navy-900)' }}>KratosID app</strong></div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: '700', color: qrCountdown < 15 ? 'var(--text-crimson-strong)' : 'var(--text-teal-strong)', marginBottom: '0.75rem', fontFamily: 'monospace' }}>{formatTime(qrCountdown)}</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
                     <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⏳</span>
-                    <span style={{ fontSize: '0.8125rem', color: '#94A3B8' }}>Waiting for scan…</span>
-                  </div>
-                  <button onClick={cancelQR} style={{ marginTop: '0.75rem', padding: '0.4rem 1rem', borderRadius: '4px', background: 'rgba(255,255,255,0.1)', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.15)', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--color-slate-500)' }}>Waiting for scan…</span>
+                  </div>                    <button onClick={cancelQR} className="btn btn-secondary btn-sm" style={{ marginTop: '0.75rem' }}>Cancel</button>
                 </>
               )}
             </div>
@@ -211,14 +210,14 @@ export default function SuperAdminLogin() {
           <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--color-slate-200)' }} />
         </div>
 
-        <button type="button" onClick={() => { setError(''); handleGoogleLogin(); }} disabled={googleLoading || rateLimited || kratosState === 'waiting'} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.65rem', padding: '0.72rem 1rem', backgroundColor: '#FFFFFF', border: '1.5px solid #E2E8F0', borderRadius: '6px', fontSize: '0.9375rem', fontWeight: '600', color: '#1E293B', cursor: (googleLoading || kratosState === 'waiting') ? 'not-allowed' : 'pointer', opacity: (googleLoading || kratosState === 'waiting') ? 0.6 : 1, transition: 'border-color 0.15s, box-shadow 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', fontFamily: 'inherit' }}>
+        <button type="button" onClick={() => { setError(''); handleGoogleLogin(); }} disabled={googleLoading || rateLimited || kratosState === 'waiting'} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.65rem', padding: '0.72rem 1rem', backgroundColor: 'var(--color-slate-50)', border: '1.5px solid var(--color-slate-300)', borderRadius: '6px', fontSize: '0.9375rem', fontWeight: '600', color: 'var(--color-navy-900)', cursor: (googleLoading || kratosState === 'waiting') ? 'not-allowed' : 'pointer', opacity: (googleLoading || kratosState === 'waiting') ? 0.6 : 1, transition: 'border-color 0.15s, box-shadow 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', fontFamily: 'inherit' }}>
           <GoogleIcon />{googleLoading ? 'Signing in…' : 'Continue with Google (VIT-AP)'}
         </button>
         <p style={{ fontSize: '0.72rem', color: 'var(--color-slate-400)', textAlign: 'center', marginTop: '0.4rem' }}>
           <strong>@vitap.ac.in</strong> authorized admin email required
         </p>
 
-        <div style={{ backgroundColor: '#FEF3C7', padding: '0.65rem', borderRadius: 'var(--radius-sm)', marginTop: '1.25rem', fontSize: '0.75rem', color: '#92400E', textAlign: 'center', border: '1px solid #FDE68A' }}>
+        <div className="alert alert-warning" style={{ marginTop: '1.25rem', fontSize: '0.75rem', textAlign: 'center' }}>
           <strong>⚠️ Restricted Access:</strong> Only authorized Super Administrators may sign in here.
         </div>
 

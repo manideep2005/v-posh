@@ -3,6 +3,16 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build:client",
   "outputDirectory": "client/dist",
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 60,
+      "memory": 1024,
+      "includeFiles": "node_modules/pdfkit/**"
+    }
+  },
+  "crons": [
+    { "path": "/api/maintenance/escalate", "schedule": "0 3 * * *" }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }

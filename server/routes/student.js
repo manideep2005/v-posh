@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const config = require('../config');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logAuditAction } = require('../middleware/audit');
-const { sendEmail, TEMPLATES } = require('../services/email');
+const { sendService } = require('../services/email');
 const { getSLAStatus } = require('../services/sla');
+const { statutoryMilestones } = require('../services/statutory');
 
 // Middleware to ensure user is student
 router.use(authenticateToken, requireRole(['student']));
@@ -133,16 +135,41 @@ router.post('/complaints', async (req, res) => {
       isRead: false
     });
 
-    // Send confirmation email to student
-    sendEmail({
+    // Confirmation email to the student
+    sendService('complaint_acknowledgement', {
       to: req.user.email,
-      ...TEMPLATES.complaintSubmitted({
+      data: {
         referenceId,
         studentName: req.user.name,
         title: String(title).trim(),
         category,
-      })
-    }).catch(err => console.error('[Email] Complaint submission email failed:', err.message));
+        priority: 'Medium',
+        submittedAt: newComplaint.createdAt,
+      },
+      meta: { complaintId: newComplaint.id },
+    }).catch(err => console.error('[Email] Complaint acknowledgement failed:', err.message));
+
+    // Alert the ICC queue (mailbox + every active officer)
+    const iccOfficers = await db.users.find({ role: { $in: ['admin', 'super_admin'] }, status: 'active' });
+    const alertData = {
+      referenceId,
+      title: String(title).trim(),
+      category,
+      priority: 'Medium',
+      raisedByName: req.user.name,
+      raisedByRole: 'student',
+      department: req.user.department || 'N/A',
+      submittedAt: newComplaint.createdAt,
+    };
+    const iccRecipients = new Set(iccOfficers.map(o => o.email).filter(Boolean));
+    if (config.ICC_NOTIFICATION_EMAIL) iccRecipients.add(config.ICC_NOTIFICATION_EMAIL);
+    for (const recipient of iccRecipients) {
+      sendService('new_complaint_alert', {
+        to: recipient,
+        data: { ...alertData, officerName: 'ICC Committee' },
+        meta: { complaintId: newComplaint.id },
+      }).catch(err => console.error('[Email] New complaint alert failed:', err.message));
+    }
 
     logAuditAction(req, 'COMPLAINT_SUBMITTED', 'COMPLAINT', newComplaint.id, `Student raised complaint ${referenceId}`);
 
@@ -197,8 +224,10 @@ router.get('/complaints/:id', async (req, res) => {
     // Attachments
     const complaintAttachments = await db.attachments.find({ complaintId: complaint.id });
 
-    // Calculate SLA status
+    // Calculate SLA status + statutory milestones for the case tracker
     const sla = getSLAStatus(complaint);
+    const statutory = statutoryMilestones(complaint, history);
+    const feedback = await db.caseFeedback.findOne({ complaintId: complaint.id });
 
     res.json({
       success: true,
@@ -206,7 +235,9 @@ router.get('/complaints/:id', async (req, res) => {
       history,
       updates: publicUpdates,
       attachments: complaintAttachments,
-      sla
+      sla,
+      statutory,
+      feedbackSubmitted: !!feedback
     });
   } catch (err) {
     console.error('Complaint detail error:', err);

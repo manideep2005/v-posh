@@ -2,6 +2,16 @@ const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 const crypto = require('crypto');
 const fs = require('fs');
+const config = require('../config');
+
+// Public base URL used inside QR codes. Falls back to the institutional domain
+// when the deployment has not configured APP_BASE_URL, and always normalises
+// to an absolute https:// URL so the QR is scannable from a PDF.
+function publicBaseUrl() {
+  let base = (config.APP_BASE_URL || 'https://vposh.vitap.ac.in').trim().replace(/\/+$/, '');
+  if (base && !/^https?:\/\//i.test(base)) base = `https://${base}`;
+  return base || 'https://vposh.vitap.ac.in';
+}
 
 const COLORS = {
   navy: '#0F172A', navyLight: '#1E293B', teal: '#0D9488',
@@ -21,7 +31,12 @@ async function fetchImg(p) {
   if (!p) return null;
   try {
     if (p.startsWith('data:')) return Buffer.from(p.split(',')[1], 'base64');
-    if (p.startsWith('http')) { const r = await fetch(p); return r.ok ? Buffer.from(await r.arrayBuffer()) : null; }
+    // Remote avatars: never let a slow CDN hold the whole PDF request open on
+    // a serverless host — fall back to the initials placeholder instead.
+    if (p.startsWith('http')) {
+      const r = await fetch(p, { signal: AbortSignal.timeout(3000) });
+      return r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+    }
     if (fs.existsSync(p)) return fs.readFileSync(p);
   } catch {}
   return null;
@@ -33,10 +48,19 @@ async function qrBuf(data) {
 }
 
 // ─── PDF Builder ──────────────────────────────────────────────────────────────
+function fmtStamp(d) {
+  const dt = new Date(d);
+  return `${dt.toISOString().slice(0, 10)} ${dt.toISOString().slice(11, 16)} UTC`;
+}
+
 class Doc {
-  constructor(title) {
+  constructor(title, viewer) {
     this.docId = genDocId();
     this.verifyToken = null;
+    // Who generated this copy — printed as a watermark and in the footer so a
+    // leaked document can be traced back to the account that produced it.
+    this.viewer = viewer && viewer.name ? viewer : { name: 'V-POSH System', role: 'system' };
+    this.issuedAt = new Date();
     this.W = 595.28; this.H = 841.89; this.M = 50;
     this.cw = this.W - this.M * 2;
     this.pages = 0;
@@ -89,6 +113,14 @@ class Doc {
       this.doc.save().moveTo(this.M, hy + 28).lineTo(this.W - this.M, hy + 28)
         .lineWidth(0.5).strokeColor(COLORS.teal).stroke().restore();
 
+      // Watermark — identifies the generated copy on every page.
+      const stamp = `${this.viewer.name} • ${(this.viewer.role || 'user').toUpperCase()} • ${fmtStamp(this.issuedAt)} • ${this.docId}`;
+      this.doc.save();
+      this.doc.fillColor(COLORS.navy).fillOpacity(0.07).font(F.bold).fontSize(26);
+      this.doc.rotate(-28, { origin: [this.W / 2, this.H / 2] });
+      this.doc.text(stamp, 0, this.H / 2 - 14, { width: this.W, align: 'center', lineBreak: false });
+      this.doc.restore();
+
       // Footer
       const fy = this.H - this.M - 10;
       this.doc.save().moveTo(this.M, fy - 10).lineTo(this.W - this.M, fy - 10)
@@ -99,6 +131,8 @@ class Doc {
         .text('STRICTLY CONFIDENTIAL', 0, fy, { width: this.W, align: 'center', lineBreak: false });
       this.doc.font(F.regular).fontSize(6.5).fillColor(COLORS.slateLight)
         .text(`Page ${i + 1} of ${total}`, this.W - this.M - 80, fy, { width: 80, align: 'right', lineBreak: false });
+      this.doc.font(F.regular).fontSize(6).fillColor(COLORS.slateLight)
+        .text(`Copy generated for ${this.viewer.name} (${this.viewer.role || 'user'}) on ${fmtStamp(this.issuedAt)}`, this.M, fy + 8, { width: this.cw, align: 'left', lineBreak: false });
     }
   }
 
@@ -118,8 +152,8 @@ function placeholder(d, x, y, sz, user) {
 }
 
 // ─── TYPE 1: Complaint Acknowledgement ───────────────────────────────────────
-async function generateAcknowledgement(complaint, user) {
-  const d = new Doc(`Complaint Acknowledgement - ${complaint.referenceId}`);
+async function generateAcknowledgement(complaint, user, viewer) {
+  const d = new Doc(`Complaint Acknowledgement - ${complaint.referenceId}`, viewer);
   d.verifyToken = genToken(complaint.id, d.docId);
   let y = d.newPage();
 
@@ -181,7 +215,7 @@ async function generateAcknowledgement(complaint, user) {
   // QR
   if (!addSectionToPage(d, y, 90)) { y = d.newPage(); }
   y = d.gap(d.M + 40);
-  const qr = await qrBuf(`https://vposh.vitap.ac.in/verify/${d.docId}?token=${d.verifyToken}`);
+  const qr = await qrBuf(`${publicBaseUrl()}/verify/${complaint.referenceId}?doc=${d.docId}&token=${d.verifyToken}`);
   if (qr) {
     d.doc.image(qr, d.M + (d.cw - 60) / 2, y, { width: 60, height: 60 });
     d.doc.font(F.bold).fontSize(7).fillColor(COLORS.navy).text('Document Verification', d.M, y + 65, { width: d.cw, align: 'center', lineBreak: false });
@@ -193,8 +227,8 @@ async function generateAcknowledgement(complaint, user) {
 }
 
 // ─── TYPE 2: Case Status Report ──────────────────────────────────────────────
-async function generateStatusReport(complaint, user, history = [], updates = []) {
-  const d = new Doc(`Case Status Report - ${complaint.referenceId}`);
+async function generateStatusReport(complaint, user, history = [], updates = [], viewer) {
+  const d = new Doc(`Case Status Report - ${complaint.referenceId}`, viewer);
   d.verifyToken = genToken(complaint.id, d.docId);
   let y = d.newPage();
 
@@ -440,7 +474,7 @@ async function generateStatusReport(complaint, user, history = [], updates = [])
   // QR
   if (!addSectionToPage(d, y, 90)) { y = d.newPage(); }
   y = d.gap(d.M + 40);
-  const qr = await qrBuf(`https://vposh.vitap.ac.in/verify/${d.docId}?token=${d.verifyToken}`);
+  const qr = await qrBuf(`${publicBaseUrl()}/verify/${complaint.referenceId}?doc=${d.docId}&token=${d.verifyToken}`);
   if (qr) {
     d.doc.image(qr, d.M + (d.cw - 60) / 2, y, { width: 60, height: 60 });
     d.doc.font(F.bold).fontSize(7).fillColor(COLORS.navy).text('Document Verification', d.M, y + 65, { width: d.cw, align: 'center', lineBreak: false });

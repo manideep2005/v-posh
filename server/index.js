@@ -24,12 +24,31 @@ const app = createApp();
     console.log(`=======================================================`);
   });
 
-  // SLA auto-escalation: check every hour for breached SLAs
+  // Statutory escalation ladder: sweep every hour for missed POSH deadlines.
+  // On serverless hosts the in-process timer does not run for long — the same
+  // sweep is exposed at /api/maintenance/escalate for Vercel Cron.
+  const { runEscalationSweep } = require('./services/escalation');
   const { checkAndEscalate } = require('./services/sla');
-  setInterval(() => {
-    checkAndEscalate().catch(err => console.error('[SLA] Cron error:', err.message));
-  }, 60 * 60 * 1000); // every hour
-  console.log('[SLA] Auto-escalation cron started (every 60 minutes)');
+
+  // Both sweeps send email, so they run together on the same hourly tick:
+  // `checkAndEscalate` warns/notifies before and after SLA deadlines pass, and
+  // `runEscalationSweep` walks the statutory L1–L3 ladder.
+  const runSweeps = async (label) => {
+    try {
+      await checkAndEscalate();
+    } catch (err) {
+      console.error(`[SLA] ${label} error:`, err.message);
+    }
+    try {
+      await runEscalationSweep();
+    } catch (err) {
+      console.error(`[Escalation] ${label} error:`, err.message);
+    }
+  };
+
+  setInterval(() => { runSweeps('Cron'); }, 60 * 60 * 1000); // every hour
+  runSweeps('Startup sweep');
+  console.log('[SLA/Escalation] Hourly deadline sweep started (every 60 minutes)');
 })();
 
 // Graceful shutdown

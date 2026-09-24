@@ -9,6 +9,7 @@ const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const { logAuditAction } = require('../middleware/audit');
 const { rateLimit } = require('../middleware/rateLimit');
+const { sendService, isConfigured: isEmailConfigured } = require('../services/email');
 
 // Brute-force protection: 10 attempts per 15 minutes per IP per endpoint
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
@@ -27,6 +28,33 @@ function isValidEmail(email) {
 
 function signToken(user) {
   return jwt.sign({ id: user.id, role: user.role }, config.JWT_SECRET, { expiresIn: config.JWT_EXPIRES_IN });
+}
+
+const ROLE_LABELS = { student: 'Student', faculty: 'Faculty', admin: 'Admin', super_admin: 'Super Admin' };
+
+/**
+ * Welcome email for a first-time account.
+ *
+ * Called ONLY from the `if (!user)` provisioning branches of the signup and
+ * SSO/passwordless handlers, so a returning student never receives a second
+ * welcome mail. Fire-and-forget: a mail failure never blocks sign-in.
+ */
+function sendWelcomeEmail(user, { createdBy }) {
+  sendService('account_provisioned', {
+    to: user.email,
+    data: {
+      welcome: true,
+      userName: user.name,
+      email: user.email,
+      role: user.role,
+      roleLabel: ROLE_LABELS[user.role] || user.role,
+      employeeId: user.studentId || user.employeeId || '—',
+      department: user.department || 'Not set yet — add it from your profile',
+      designation: user.year || '—',
+      createdBy,
+    },
+    meta: { userId: user.id, welcome: true },
+  }).catch(err => console.error('[Email] Welcome email failed:', err.message));
 }
 
 function sanitizeUser(user) {
@@ -87,6 +115,8 @@ router.post('/student/signup', authLimiter, async (req, res) => {
     });
 
     logAuditAction(req, 'STUDENT_REGISTERED', 'USER', newUser.id, `Student account registered: ${newUser.name} (${newUser.studentId})`);
+
+    sendWelcomeEmail(newUser, { createdBy: 'Self-registration' });
 
     return res.status(201).json({
       success: true,
@@ -183,6 +213,19 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 
     logAuditAction(req, 'PASSWORD_CHANGED', 'USER', user.id, `Password changed by user ${user.name}`);
 
+    // Security notice — the fastest way a user learns their credentials leaked.
+    sendService('security_alert', {
+      to: user.email,
+      data: {
+        userName: user.name,
+        event: 'Password changed',
+        changedAt: new Date().toISOString(),
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+      },
+      meta: { userId: user.id },
+    }).catch(err => console.error('[Email] Password-change alert failed:', err.message));
+
     return res.json({ success: true, message: 'Password updated successfully.' });
   } catch (err) {
     console.error('Change password error:', err);
@@ -223,10 +266,27 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
   const baseUrl = config.APP_BASE_URL || `${proto}://${host}`;
   const resetLink = `${baseUrl}/auth/reset-password?token=${token}`;
 
-  // No SMTP transport is configured in this build; the reset link is returned
-  // to the requester in development. Wire an email service here for production
-  // and remove the devLink field.
-  return res.json({ success: true, message: genericMessage, devLink: resetLink });
+  // Deliver the single-use link by email. The link is only echoed back in the
+  // response when SMTP is unconfigured (local development), never in production.
+  const delivery = await sendService('password_reset', {
+    to: user.email,
+    data: {
+      userName: user.name,
+      resetLink,
+      expiresInMinutes: 30,
+      requestedAt: new Date().toISOString(),
+      ip: req.ip,
+    },
+    meta: { userId: user.id },
+  });
+
+  const emailDelivered = Boolean(delivery && delivery.success && !delivery.dev);
+  const response = { success: true, message: genericMessage };
+  if (!emailDelivered && !isEmailConfigured()) {
+    response.devLink = resetLink;
+  }
+
+  return res.json(response);
 });
 
 // Reset Password — consumes the single-use token
@@ -257,6 +317,18 @@ router.post('/reset-password', async (req, res) => {
     });
 
     logAuditAction(req, 'PASSWORD_RESET_COMPLETED', 'USER', user.id, `Password reset completed for ${user.email}`);
+
+    sendService('security_alert', {
+      to: user.email,
+      data: {
+        userName: user.name,
+        event: 'Password reset completed',
+        changedAt: new Date().toISOString(),
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+      },
+      meta: { userId: user.id },
+    }).catch(err => console.error('[Email] Password-reset alert failed:', err.message));
 
     return res.json({ success: true, message: 'Password has been reset. You can now sign in with your new password.' });
   } catch (err) {
@@ -346,6 +418,8 @@ router.post('/google', authLimiter, async (req, res) => {
 
       logAuditAction(req, autoRole === 'student' ? 'STUDENT_REGISTERED_GOOGLE' : 'FACULTY_REGISTERED_GOOGLE', 'USER', user.id,
         `${autoRole} auto-registered via Google SSO: ${user.name} (${user.email})`);
+
+      sendWelcomeEmail(user, { createdBy: 'Google SSO sign-in' });
     } else {
       // Existing user — patch Google fields if missing
       const updates = { lastActiveAt: new Date().toISOString() };
@@ -447,6 +521,8 @@ router.post('/google-access', authLimiter, async (req, res) => {
 
       logAuditAction(req, autoRole === 'student' ? 'STUDENT_REGISTERED_GOOGLE' : 'FACULTY_REGISTERED_GOOGLE', 'USER', user.id,
         `${autoRole} auto-registered via Google SSO: ${user.name} (${user.email})`);
+
+      sendWelcomeEmail(user, { createdBy: 'Google SSO sign-in' });
     } else {
       const updates = { lastActiveAt: new Date().toISOString() };
       if (!user.googleId) updates.googleId = googleId;
@@ -576,6 +652,8 @@ router.post('/kratosid/verify', authLimiter, async (req, res) => {
       });
       logAuditAction(req, autoRole === 'student' ? 'STUDENT_REGISTERED_KRATOSID' : 'FACULTY_REGISTERED_KRATOSID', 'USER', user.id,
         `${autoRole} auto-registered via KratosID: ${user.email}`);
+
+      sendWelcomeEmail(user, { createdBy: 'KratosID passwordless sign-in' });
     } else {
       await db.users.updateOne(user.id, { lastActiveAt: new Date().toISOString() });
       logAuditAction(req, 'USER_LOGIN_KRATOSID', 'USER', user.id,
@@ -770,6 +848,8 @@ router.post('/kratosid/push/poll', pollLimiter, async (req, res) => {
       });
       logAuditAction(req, autoRole === 'student' ? 'STUDENT_REGISTERED_KRATOSID' : 'FACULTY_REGISTERED_KRATOSID', 'USER', user.id,
         `${autoRole} auto-registered via KratosID push: ${user.email}`);
+
+      sendWelcomeEmail(user, { createdBy: 'KratosID push approval' });
     } else {
       // Keep the account email in sync when matched via employeeId/studentId
       if (user.email !== normalizedEmail) {
@@ -883,6 +963,8 @@ router.post('/kratosid/qr/poll', pollLimiter, async (req, res) => {
         lastActiveAt: new Date().toISOString()
       });
       logAuditAction(req, 'USER_REGISTERED_QR', 'USER', user.id, `QR login auto-provisioned: ${user.email}`);
+
+      sendWelcomeEmail(user, { createdBy: 'KratosID QR sign-in' });
     } else {
       if (user.email !== normalizedEmail) {
         await db.users.updateOne(user.id, { email: normalizedEmail });

@@ -138,9 +138,9 @@ export default function AdminCaseAllocation() {
   const filteredComplaints = getFilteredComplaints();
 
   const PRIORITY_COLORS = {
-    Low: { bg: '#F0FDF4', border: '#BBF7D0', text: '#166534' },
-    Medium: { bg: '#FFFBEB', border: '#FDE68A', text: '#92400E' },
-    High: { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B' },
+    Low: { bg: 'var(--tint-emerald)', border: 'var(--border-emerald)', text: 'var(--text-emerald-strong)' },
+    Medium: { bg: 'var(--color-amber-50)', border: 'var(--border-amber)', text: 'var(--text-amber-strong)' },
+    High: { bg: 'var(--color-crimson-50)', border: 'var(--border-crimson)', text: 'var(--text-crimson-strong)' },
     Urgent: { bg: '#F59E0B', border: '#D97706', text: '#FFFFFF' },
   };
 
@@ -156,12 +156,12 @@ export default function AdminCaseAllocation() {
       </div>
 
       {msg && (
-        <div className="alert" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.85rem 1rem', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem', background: msg.startsWith('✅') ? '#F0FDF4' : '#FEF2F2', color: msg.startsWith('✅') ? '#166534' : '#991B1B', border: `1px solid ${msg.startsWith('✅') ? '#BBF7D0' : '#FECACA'}` }}>
+        <div className="alert" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.85rem 1rem', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem', background: msg.startsWith('✅') ? 'var(--tint-emerald)' : 'var(--color-crimson-50)', color: msg.startsWith('✅') ? 'var(--text-emerald-strong)' : 'var(--text-crimson-strong)', border: `1px solid ${msg.startsWith('✅') ? 'var(--border-emerald)' : 'var(--border-crimson)'}` }}>
           {msg}
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '1.5rem' }}>
+      <div className="split-sidebar">
         {/* Left: Pending Complaints */}
         <div className="panel">
           <div className="panel-header">
@@ -193,8 +193,8 @@ export default function AdminCaseAllocation() {
 
           {/* Bulk Actions Bar */}
           {selectedComplaints.length > 0 && (
-            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', padding: '0.75rem', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 'var(--radius-sm)', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.8125rem', fontWeight: '600', color: '#1E40AF' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', padding: '0.75rem', background: 'var(--color-blue-50)', border: '1px solid var(--border-blue)', borderRadius: 'var(--radius-sm)', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-blue-strong)' }}>
                 {selectedComplaints.length} case(s) selected
               </span>
               <div style={{ flex: 1 }} />
@@ -230,7 +230,7 @@ export default function AdminCaseAllocation() {
               {filteredComplaints.map(c => {
                 const pc = PRIORITY_COLORS[c.priority] || PRIORITY_COLORS.Medium;
                 return (
-                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem', border: selectedComplaints.includes(c.id) ? '2px solid #3B82F6' : '1px solid var(--color-slate-200)', borderRadius: 'var(--radius-sm)', background: selectedComplaints.includes(c.id) ? '#EFF6FF' : '#fff', transition: 'all 0.15s' }}>
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem', border: selectedComplaints.includes(c.id) ? '2px solid #3B82F6' : '1px solid var(--color-slate-200)', borderRadius: 'var(--radius-sm)', background: selectedComplaints.includes(c.id) ? 'var(--color-blue-50)' : 'var(--color-slate-50)', transition: 'all 0.15s' }}>
                     <input
                       type="checkbox"
                       checked={selectedComplaints.includes(c.id)}
@@ -300,13 +300,13 @@ export default function AdminCaseAllocation() {
                   const maxCases = Math.max(...officers.map(o => o.activeCases), 1);
                   const barWidth = (off.activeCases / maxCases) * 100;
                   return (
-                    <div key={off.id} style={{ padding: '0.75rem', border: '1px solid var(--color-slate-200)', borderRadius: 'var(--radius-sm)', background: '#fff' }}>
+                    <div key={off.id} style={{ padding: '0.75rem', border: '1px solid var(--color-slate-200)', borderRadius: 'var(--radius-sm)', background: 'var(--color-slate-50)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                         <div>
                           <span style={{ fontWeight: '700', fontSize: '0.8125rem', color: 'var(--color-navy-900)' }}>{off.name}</span>
                           <span style={{ fontSize: '0.6875rem', color: 'var(--color-slate-500)', marginLeft: '0.35rem' }}>({off.role === 'super_admin' ? 'Super Admin' : 'Admin'})</span>
                         </div>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: off.activeCases > 5 ? '#991B1B' : off.activeCases > 2 ? '#92400E' : '#166534' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: off.activeCases > 5 ? 'var(--text-crimson-strong)' : off.activeCases > 2 ? 'var(--text-amber-strong)' : 'var(--text-emerald-strong)' }}>
                           {off.activeCases} active
                         </span>
                       </div>

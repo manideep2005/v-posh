@@ -30,11 +30,11 @@ export default function ProtectedRoute({ allowedRoles = [], children }) {
     return (
       <div className="container" style={{ padding: '4rem 0' }}>
         <div className="alert alert-danger" style={{ maxWidth: '600px', margin: '0 auto', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '2rem' }}>
-          <ShieldAlert size={48} color="#991B1B" />
+          <ShieldAlert size={48} color="var(--text-crimson-strong)" />
           <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: '1rem 0 0.5rem 0' }}>
             403 - Role Access Restricted
           </h2>
-          <p style={{ fontSize: '0.875rem', marginBottom: '1.5rem', color: '#7F1D1D' }}>
+          <p style={{ fontSize: '0.875rem', marginBottom: '1.5rem', color: 'var(--text-crimson-body)' }}>
             Your account role (<strong>{user.role}</strong>) does not have authorization to access the route <code>{location.pathname}</code>.
           </p>
           <div style={{ display: 'flex', gap: '0.75rem' }}>

@@ -3,8 +3,9 @@ const router = express.Router();
 const db = require('../db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logAuditAction } = require('../middleware/audit');
-const { sendEmail, TEMPLATES } = require('../services/email');
+const { sendService } = require('../services/email');
 const { getSLAStatus } = require('../services/sla');
+const { statutoryMilestones, complianceSummary } = require('../services/statutory');
 
 // Middleware to enforce Admin / Super Admin access
 router.use(authenticateToken, requireRole(['admin', 'super_admin']));
@@ -38,6 +39,14 @@ router.get('/dashboard', async (req, res) => {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, 8);
 
+    const historyRows = await db.statusHistory.find();
+    const historyByComplaint = {};
+    historyRows.forEach(h => {
+      historyByComplaint[h.complaintId] = historyByComplaint[h.complaintId] || [];
+      historyByComplaint[h.complaintId].push(h);
+    });
+    const compliance = complianceSummary(complaints, historyByComplaint);
+
     res.json({
       success: true,
       stats: {
@@ -46,8 +55,12 @@ router.get('/dashboard', async (req, res) => {
         underReview,
         actionTaken,
         resolved,
-        approachingSLA
+        approachingSLA,
+        statutoryOverdue: compliance.overdue,
+        statutoryDueSoon: compliance.dueSoon,
+        unassigned: compliance.unassigned
       },
+      compliance,
       recentComplaints: [...complaints]
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .slice(0, 6),
@@ -96,12 +109,22 @@ router.get('/complaints', async (req, res) => {
     const startIndex = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const paginatedComplaints = complaints.slice(startIndex, startIndex + parseInt(limit, 10));
 
+    // Attach the statutory compliance picture to each row so the repository can
+    // show deadlines without a second round trip.
+    const historyRows = await db.statusHistory.find();
+    const withCompliance = paginatedComplaints.map(c => {
+      const own = historyRows.filter(h => h.complaintId === c.id);
+      const { health } = statutoryMilestones(c, own);
+      return { ...c, compliance: health };
+    });
+
     res.json({
       success: true,
       total: complaints.length,
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),
-      complaints: paginatedComplaints
+      compliance: complianceSummary(complaints, {}),
+      complaints: withCompliance
     });
   } catch (err) {
     console.error('Admin complaints error:', err);
@@ -140,6 +163,7 @@ router.get('/complaints/:id', async (req, res) => {
     logAuditAction(req, 'COMPLAINT_VIEWED', 'COMPLAINT', complaint.id, `Admin ${req.user.name} viewed complaint ${complaint.referenceId}`);
 
     const sla = getSLAStatus(complaint);
+    const statutory = statutoryMilestones(complaint, history);
 
     res.json({
       success: true,
@@ -148,7 +172,8 @@ router.get('/complaints/:id', async (req, res) => {
       updates,
       attachments: complaintAttachments,
       assignedAdmin,
-      sla
+      sla,
+      statutory
     });
   } catch (err) {
     console.error('Admin complaint detail error:', err);
@@ -218,6 +243,25 @@ router.put('/complaints/:id/status', async (req, res) => {
       });
 
       logAuditAction(req, 'COMPLAINT_ASSIGNED', 'COMPLAINT', complaint.id, `Complaint ${complaint.referenceId} assigned to ${updatesObj.assignedAdminName}`);
+
+      // Email the officer so an assignment is never missed between dashboard visits
+      const assignee = await db.users.findById(updatesObj.assignedAdminId);
+      if (assignee && assignee.email) {
+        sendService('case_assigned', {
+          to: assignee.email,
+          data: {
+            officerName: assignee.name,
+            referenceId: complaint.referenceId,
+            title: complaint.title,
+            category: complaint.category,
+            priority: updatesObj.priority || complaint.priority,
+            status: updatedComplaint.status,
+            assignedBy: req.user.name,
+            mode: previousAssignee ? 'Reassignment' : 'Manual',
+          },
+          meta: { complaintId: complaint.id },
+        }).catch(err => console.error('[Email] Assignment email failed:', err.message));
+      }
     }
 
     // Record timeline history if status changed
@@ -242,19 +286,49 @@ router.put('/complaints/:id/status', async (req, res) => {
         isRead: false
       });
 
-      // Send status update email to student
+      // Notify the student. A resolution gets the closure summary (plus an
+      // anonymous feedback invitation) instead of the generic status update.
       const studentUser = await db.users.findById(complaint.userId);
-      if (studentUser) {
-        sendEmail({
-          to: studentUser.email,
-          ...TEMPLATES.statusUpdated({
-            referenceId: complaint.referenceId,
-            studentName: studentUser.name,
-            previousStatus,
-            newStatus: status,
-            comment: comment || '',
-          })
-        }).catch(err => console.error('[Email] Status update email failed:', err.message));
+      if (studentUser && studentUser.email) {
+        if (status === 'Resolved') {
+          const ageDays = Math.max(1, Math.round(
+            (Date.now() - new Date(complaint.createdAt).getTime()) / 86400000
+          ));
+
+          sendService('resolution_summary', {
+            to: studentUser.email,
+            data: {
+              referenceId: complaint.referenceId,
+              studentName: studentUser.name,
+              title: complaint.title,
+              outcome: comment || 'Resolved — the committee completed its action on this case.',
+              resolvedBy: req.user.name,
+              resolvedAt: new Date().toISOString(),
+              duration: `${ageDays} day(s) from registration`,
+            },
+            meta: { complaintId: complaint.id },
+          }).catch(err => console.error('[Email] Resolution summary failed:', err.message));
+
+          sendService('feedback_request', {
+            to: studentUser.email,
+            data: { referenceId: complaint.referenceId, studentName: studentUser.name },
+            meta: { complaintId: complaint.id },
+          }).catch(err => console.error('[Email] Feedback request failed:', err.message));
+        } else {
+          sendService('status_update', {
+            to: studentUser.email,
+            data: {
+              referenceId: complaint.referenceId,
+              studentName: studentUser.name,
+              previousStatus,
+              newStatus: status,
+              comment: comment || '',
+              changedBy: req.user.name,
+              changedAt: new Date().toISOString(),
+            },
+            meta: { complaintId: complaint.id },
+          }).catch(err => console.error('[Email] Status update email failed:', err.message));
+        }
       }
     }
 
@@ -315,15 +389,17 @@ router.post('/complaints/:id/updates', async (req, res) => {
 
       // Send official update email to student
       const updateStudent = await db.users.findById(complaint.userId);
-      if (updateStudent) {
-        sendEmail({
+      if (updateStudent && updateStudent.email) {
+        sendService('official_update', {
           to: updateStudent.email,
-          ...TEMPLATES.officialUpdate({
+          data: {
             referenceId: complaint.referenceId,
             studentName: updateStudent.name,
             authorName: req.user.name,
             updateText: String(updateText).trim(),
-          })
+            postedAt: new Date().toISOString(),
+          },
+          meta: { complaintId: complaint.id },
         }).catch(err => console.error('[Email] Official update email failed:', err.message));
       }
     }
@@ -392,6 +468,18 @@ router.put('/students/:id/status', async (req, res) => {
     await db.users.updateOne(student.id, { status });
 
     logAuditAction(req, 'STUDENT_STATUS_TOGGLED', 'USER', student.id, `Student ${student.name} status updated to ${status}`);
+
+    sendService('account_status_changed', {
+      to: student.email,
+      data: {
+        userName: student.name,
+        email: student.email,
+        newStatus: status,
+        changedBy: req.user.name,
+        reason: req.body.reason || '',
+      },
+      meta: { userId: student.id },
+    }).catch(err => console.error('[Email] Student status email failed:', err.message));
 
     res.json({ success: true, message: `Student status updated to ${status}.` });
   } catch (err) {
@@ -486,17 +574,20 @@ router.post('/complaints/:id/allocate', async (req, res) => {
     });
 
     // Send email to officer
-    sendEmail({
+    sendService('case_assigned', {
       to: officer.email,
-      ...TEMPLATES.caseAssigned({
+      data: {
         referenceId: complaint.referenceId,
         title: complaint.title,
+        category: complaint.category,
         priority: complaint.priority,
         status: updated.status,
         officerName: officer.name,
         assignedBy: req.user.name,
-      })
-    }).catch(err => console.error('Email failed:', err.message));
+        mode: 'Manual allocation',
+      },
+      meta: { complaintId: complaint.id },
+    }).catch(err => console.error('[Email] Allocation email failed:', err.message));
 
     logAuditAction(req, 'COMPLAINT_ASSIGNED', 'COMPLAINT', complaint.id, `Complaint ${complaint.referenceId} allocated to ${officer.name}`);
 
@@ -525,6 +616,7 @@ router.post('/complaints/bulk-allocate', async (req, res) => {
     }
 
     let allocated = 0;
+    const allocatedCases = [];
     for (const id of complaintIds) {
       const complaint = await db.complaints.findOne(c => c.id === id || c.referenceId === id);
       if (!complaint) continue;
@@ -554,7 +646,26 @@ router.post('/complaints/bulk-allocate', async (req, res) => {
         comment: `Bulk allocation to ${officer.name}`
       });
 
+      allocatedCases.push({
+        referenceId: complaint.referenceId,
+        title: complaint.title,
+        priority: complaint.priority,
+      });
       allocated++;
+    }
+
+    // One digest email for the whole batch — see case_assigned bulk rendering.
+    if (allocatedCases.length && officer.email) {
+      sendService('case_assigned', {
+        to: officer.email,
+        data: {
+          officerName: officer.name,
+          cases: allocatedCases,
+          assignedBy: req.user.name,
+          mode: 'Bulk allocation',
+        },
+        meta: { complaintIds },
+      }).catch(err => console.error('[Email] Bulk allocation email failed:', err.message));
     }
 
     logAuditAction(req, 'BULK_COMPLAINT_ASSIGNED', 'COMPLAINT', null, `${allocated} complaints bulk-allocated to ${officer.name}`);
@@ -616,6 +727,21 @@ router.post('/complaints/:id/auto-allocate', async (req, res) => {
       changedByRole: req.user.role,
       comment: `Auto-allocated to ${chosen.name} (${workload[0].activeCases} active cases)`
     });
+
+    sendService('case_assigned', {
+      to: chosen.email,
+      data: {
+        officerName: chosen.name,
+        referenceId: complaint.referenceId,
+        title: complaint.title,
+        category: complaint.category,
+        priority: complaint.priority,
+        status: updated.status,
+        assignedBy: `${req.user.name} (auto-allocation)`,
+        mode: `Auto — least workload (${workload[0].activeCases} active cases)`,
+      },
+      meta: { complaintId: complaint.id },
+    }).catch(err => console.error('[Email] Auto-allocation email failed:', err.message));
 
     logAuditAction(req, 'COMPLAINT_AUTO_ASSIGNED', 'COMPLAINT', complaint.id, `Complaint ${complaint.referenceId} auto-allocated to ${chosen.name}`);
 
@@ -720,6 +846,21 @@ router.post('/faculty', async (req, res) => {
 
     logAuditAction(req, 'FACULTY_ACCOUNT_CREATED', 'USER', newFaculty.id, `Created faculty account: ${name} (${department})`);
 
+    sendService('account_provisioned', {
+      to: newFaculty.email,
+      data: {
+        userName: newFaculty.name,
+        email: newFaculty.email,
+        role: 'faculty',
+        roleLabel: 'Faculty',
+        employeeId: newFaculty.employeeId,
+        department: newFaculty.department,
+        designation: newFaculty.designation,
+        createdBy: req.user.name,
+      },
+      meta: { userId: newFaculty.id },
+    }).catch(err => console.error('[Email] Faculty provisioned email failed:', err.message));
+
     const { password: _, ...safe } = newFaculty;
     res.status(201).json({ success: true, message: `Faculty account for ${name} created.`, faculty: safe });
   } catch (err) {
@@ -738,6 +879,18 @@ router.put('/faculty/:id/status', async (req, res) => {
     }
     await db.users.updateOne(faculty.id, { status });
     logAuditAction(req, 'FACULTY_STATUS_TOGGLED', 'USER', faculty.id, `Faculty ${faculty.name} status → ${status}`);
+
+    sendService('account_status_changed', {
+      to: faculty.email,
+      data: {
+        userName: faculty.name,
+        email: faculty.email,
+        newStatus: status,
+        changedBy: req.user.name,
+        reason: req.body.reason || '',
+      },
+      meta: { userId: faculty.id },
+    }).catch(err => console.error('[Email] Faculty status email failed:', err.message));
     res.json({ success: true, message: `Faculty status updated to ${status}.` });
   } catch (err) {
     console.error('Faculty status error:', err);

@@ -5,6 +5,9 @@ const config = require('../config');
 const db = require('../db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logAuditAction } = require('../middleware/audit');
+const { sendService } = require('../services/email');
+const { complianceSummary } = require('../services/statutory');
+const { verifyLedger } = require('../services/ledger');
 
 // Middleware: Strictly require Super Admin role
 router.use(authenticateToken, requireRole(['super_admin']));
@@ -44,12 +47,57 @@ router.get('/dashboard', async (req, res) => {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, 10);
 
+    // Statutory compliance picture across every open case.
+    const historyRows = await db.statusHistory.find();
+    const historyByComplaint = {};
+    historyRows.forEach(h => {
+      historyByComplaint[h.complaintId] = historyByComplaint[h.complaintId] || [];
+      historyByComplaint[h.complaintId].push(h);
+    });
+    const compliance = complianceSummary(complaints, historyByComplaint);
+
+    // Escalations raised in the last 7 days (recorded on the case timeline).
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recentEscalations = historyRows
+      .filter(h => typeof h.comment === 'string' && h.comment.includes('[ESCALATION:L') && new Date(h.createdAt).getTime() > weekAgo)
+      .map(h => ({
+        complaintId: h.complaintId,
+        level: Number((h.comment.match(/\[ESCALATION:L(\d)\]/) || [])[1] || 0),
+        comment: h.comment.replace(/\[ESCALATION:L\d\]\s*/, ''),
+        createdAt: h.createdAt,
+      }))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const [feedback, ledger] = await Promise.all([
+      db.caseFeedback.find(),
+      verifyLedger(),
+    ]);
+    const ratedValues = feedback.flatMap(f => [f.feltHeard, f.processFair, f.timeliness, f.clearCommunication])
+      .filter(v => typeof v === 'number');
+    const satisfaction = ratedValues.length
+      ? Math.round((ratedValues.reduce((a, b) => a + b, 0) / ratedValues.length) * 10) / 10
+      : null;
+
     res.json({
       success: true,
       stats,
       categoryStats,
       departmentStats,
-      recentAuditLogs
+      recentAuditLogs,
+      compliance,
+      escalations: {
+        last7Days: recentEscalations.length,
+        byLevel: { L1: recentEscalations.filter(e => e.level === 1).length, L2: recentEscalations.filter(e => e.level === 2).length, L3: recentEscalations.filter(e => e.level === 3).length },
+        recent: recentEscalations.slice(0, 5),
+      },
+      feedback: { responses: feedback.length, satisfaction },
+      ledger: {
+        verified: ledger.verified,
+        chainedEntries: ledger.chainedEntries,
+        unchainedEntries: ledger.unchainedEntries,
+        headShort: ledger.headShort,
+        tampered: ledger.tampered.length,
+      },
     });
   } catch (err) {
     console.error('Super Admin dashboard error:', err);
@@ -116,6 +164,23 @@ router.post('/admins', async (req, res) => {
 
     logAuditAction(req, 'ADMIN_ACCOUNT_CREATED', 'USER', newAdmin.id, `Provisioned new admin account: ${name} (${employeeId})`);
 
+    // Credentials are deliberately NOT emailed — the provisioning officer hands
+    // them over out of band.
+    sendService('account_provisioned', {
+      to: newAdmin.email,
+      data: {
+        userName: newAdmin.name,
+        email: newAdmin.email,
+        role: newAdmin.role,
+        roleLabel: 'ICC Admin',
+        employeeId: newAdmin.employeeId,
+        department: newAdmin.department,
+        designation: newAdmin.designation,
+        createdBy: req.user.name,
+      },
+      meta: { userId: newAdmin.id },
+    }).catch(err => console.error('[Email] Account provisioned email failed:', err.message));
+
     const { password: _, ...adminWithoutPassword } = newAdmin;
     res.status(201).json({
       success: true,
@@ -177,6 +242,18 @@ router.put('/admins/:id/status', async (req, res) => {
 
     logAuditAction(req, 'ADMIN_STATUS_CHANGED', 'USER', targetAdmin.id, `Changed admin status of ${targetAdmin.name} to ${status}`);
 
+    sendService('account_status_changed', {
+      to: targetAdmin.email,
+      data: {
+        userName: targetAdmin.name,
+        email: targetAdmin.email,
+        newStatus: status,
+        changedBy: req.user.name,
+        reason: req.body.reason || '',
+      },
+      meta: { userId: targetAdmin.id },
+    }).catch(err => console.error('[Email] Account status email failed:', err.message));
+
     res.json({ success: true, message: `Admin status set to ${status}.` });
   } catch (err) {
     console.error('Admin status error:', err);
@@ -220,6 +297,64 @@ router.get('/audit-logs', async (req, res) => {
   } catch (err) {
     console.error('Audit logs error:', err);
     res.status(500).json({ success: false, message: 'Failed to load audit trail logs.' });
+  }
+});
+
+// Shared filter for the audit trail (used by the list, the export and nothing else)
+async function filteredAuditLogs(query) {
+  const { action, actorRole, search } = query;
+  let logs = await db.auditLogs.find();
+  if (action && action !== 'ALL') logs = logs.filter(l => l.action === action);
+  if (actorRole && actorRole !== 'ALL') logs = logs.filter(l => l.actorRole === actorRole);
+  if (search) {
+    const q = String(search).toLowerCase();
+    logs = logs.filter(l =>
+      (l.actorName || '').toLowerCase().includes(q) ||
+      (l.details || '').toLowerCase().includes(q) ||
+      (l.action || '').toLowerCase().includes(q)
+    );
+  }
+  return logs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+// Tamper-evidence: recompute the hash chain and report any broken link
+router.get('/audit-logs/verify', async (req, res) => {
+  try {
+    const ledger = await verifyLedger();
+    logAuditAction(req, 'AUDIT_LEDGER_VERIFIED', 'SYSTEM', 'audit_logs',
+      `Ledger integrity check: ${ledger.verified ? 'intact' : `${ledger.tampered.length} anomaly(ies)`} across ${ledger.chainedEntries} chained entries`);
+    res.json({ success: true, ledger });
+  } catch (err) {
+    console.error('Ledger verify error:', err);
+    res.status(500).json({ success: false, message: 'Failed to verify the audit ledger.' });
+  }
+});
+
+// Audit trail export (CSV) honouring the active filters, for auditors
+router.get('/audit-logs/export', async (req, res) => {
+  try {
+    const logs = await filteredAuditLogs(req.query);
+    const header = ['Timestamp', 'Action', 'Actor', 'Role', 'Target Type', 'Target ID', 'Details', 'IP Address', 'Ledger Hash', 'Previous Hash'];
+    const rows = logs.map(l => [
+      l.createdAt, l.action, l.actorName, l.actorRole, l.targetType, l.targetId, l.details, l.ipAddress,
+      l.entryHash || '(pre-ledger)', l.prevHash || '(pre-ledger)'
+    ]);
+    const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+
+    logAuditAction(req, 'AUDIT_LOG_EXPORTED', 'SYSTEM', 'audit_logs', `Exported ${logs.length} audit entries to CSV`);
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="VPOSH_Audit_Trail_${stamp}.csv"`);
+    res.send('\uFEFF' + csv); // BOM keeps Excel happy with UTF-8
+  } catch (err) {
+    console.error('Audit export error:', err);
+    res.status(500).json({ success: false, message: 'Failed to export the audit trail.' });
   }
 });
 

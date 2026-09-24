@@ -73,7 +73,7 @@ export default function StudentSignup() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="grid-2" style={{ gap: '1rem' }}>
             <div className="form-group">
               <label htmlFor="name">Full Name <span className="required">*</span></label>
               <input
@@ -117,7 +117,7 @@ export default function StudentSignup() {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="grid-2" style={{ gap: '1rem' }}>
             <div className="form-group">
               <label htmlFor="department">Department <span className="required">*</span></label>
               <select
@@ -170,7 +170,7 @@ export default function StudentSignup() {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="grid-2" style={{ gap: '1rem' }}>
             <div className="form-group">
               <label htmlFor="password">Password <span className="required">*</span></label>
               <input

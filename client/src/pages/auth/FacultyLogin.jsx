@@ -192,7 +192,7 @@ export default function FacultyLogin() {
                 </>
               ) : (
                 <>
-                  <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', display: 'inline-block', marginBottom: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}><QRCodeSVG value={qrData.qrPayload} size={180} level="M" /></div>
+                  <div style={{ background: 'var(--color-slate-50)', borderRadius: '12px', padding: '1.25rem', display: 'inline-block', marginBottom: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}><QRCodeSVG value={qrData.qrPayload} size={180} level="M" /></div>
                   <div style={{ fontSize: '0.8125rem', color: '#93C5FD', marginBottom: '0.5rem' }}>Scan with your <strong style={{ color: '#fff' }}>KratosID app</strong></div>
                   <div style={{ fontSize: '0.875rem', fontWeight: '700', color: qrCountdown < 15 ? '#FCA5A5' : '#5EEAD4', marginBottom: '0.75rem', fontFamily: 'monospace' }}>{formatTime(qrCountdown)}</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>

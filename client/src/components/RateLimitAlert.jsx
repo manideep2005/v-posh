@@ -44,14 +44,14 @@ export default function RateLimitAlert({ error, onRetry, onDismiss }) {
       role="alert"
       style={{
         marginBottom: '1.25rem', padding: '0.9rem 1.1rem',
-        background: '#FEF2F2', border: '1px solid #FECACA', borderLeft: '4px solid #DC2626',
+        background: 'var(--color-crimson-50)', border: '1px solid var(--border-crimson)', borderLeft: '4px solid #DC2626',
         borderRadius: 8
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
         <Timer size={18} color="#DC2626" style={{ marginTop: 2, flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <strong style={{ display: 'block', fontSize: '0.875rem', color: '#991B1B' }}>
+          <strong style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-crimson-strong)' }}>
             Too many attempts — please wait
           </strong>
           <p style={{ fontSize: '0.8rem', color: '#B91C1C', margin: '0.2rem 0 0.55rem' }}>

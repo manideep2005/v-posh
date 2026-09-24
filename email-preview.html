@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>V-POSH · Email Template Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0B0F1A;
+      --surface:   #111827;
+      --surface2:  #1A2236;
+      --border:    #1E2D45;
+      --accent:    #3B82F6;
+      --accent2:   #6366F1;
+      --text:      #F1F5F9;
+      --muted:     #64748B;
+      --sidebar-w: 290px;
+    }
+    html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
+    .shell { display: flex; height: 100vh; }
+
+    /* Sidebar */
+    .sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .sidebar-header { padding: 20px 18px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .logo-badge { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; color: #fff; }
+    .logo-title { font-size: 15px; font-weight: 700; }
+    .logo-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .search-wrap { position: relative; }
+    .search-wrap input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px 8px 32px; color: var(--text); font-size: 12px; font-family: inherit; outline: none; transition: border-color .2s; }
+    .search-wrap input::placeholder { color: var(--muted); }
+    .search-wrap input:focus { border-color: var(--accent); }
+    .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 12px; pointer-events: none; }
+    .sidebar-nav { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .sidebar-nav::-webkit-scrollbar { width: 4px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .nav-group-label { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 12px 18px 4px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 18px; cursor: pointer; transition: background .15s; border-left: 3px solid transparent; }
+    .nav-item:hover { background: var(--surface2); }
+    .nav-item.active { background: rgba(59,130,246,.12); border-left-color: var(--accent); }
+    .nav-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .nav-info { flex: 1; min-width: 0; }
+    .nav-label { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nav-audience { font-size: 10.5px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nav-badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 999px; flex-shrink: 0; }
+
+    /* Main */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { padding: 16px 28px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .topbar-left { display: flex; flex-direction: column; gap: 2px; }
+    .topbar-title { font-size: 16px; font-weight: 700; }
+    .topbar-meta { font-size: 12px; color: var(--muted); }
+    .topbar-right { display: flex; gap: 8px; align-items: center; }
+    .tag { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+    .tag-info     { background: rgba(59,130,246,.15);  color: #93C5FD; }
+    .tag-success  { background: rgba(16,185,129,.15);  color: #6EE7B7; }
+    .tag-warning  { background: rgba(245,158,11,.15);  color: #FCD34D; }
+    .tag-critical { background: rgba(239,68,68,.15);   color: #FCA5A5; }
+    .count-chip { background: rgba(59,130,246,.15); color: #93C5FD; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+    .content-area { flex: 1; overflow: auto; }
+    .content-area::-webkit-scrollbar { width: 6px; }
+    .content-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+
+    /* Welcome */
+    .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 40px; text-align: center; min-height: 100%; }
+    .welcome-icon { width: 80px; height: 80px; border-radius: 20px; background: linear-gradient(135deg, rgba(59,130,246,.2), rgba(99,102,241,.2)); border: 1px solid rgba(59,130,246,.3); display: flex; align-items: center; justify-content: center; font-size: 36px; }
+    .welcome h2 { font-size: 22px; font-weight: 700; }
+    .welcome p { font-size: 14px; color: var(--muted); max-width: 400px; line-height: 1.6; }
+    .templates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; max-width: 700px; }
+    .quick-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: background .15s, border-color .15s, transform .1s; text-align: left; }
+    .quick-tile:hover { background: var(--surface2); border-color: var(--accent); transform: translateY(-1px); }
+    .quick-tile-dot { width: 8px; height: 8px; border-radius: 50%; margin-bottom: 8px; }
+    .quick-tile-label { font-size: 12px; font-weight: 600; }
+    .quick-tile-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* Email panel */
+    .email-container { display: none; flex-direction: column; gap: 20px; padding: 28px; }
+    .email-container.visible { display: flex; }
+    .email-meta-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+    .meta-field label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: 4px; }
+    .meta-field span { font-size: 13px; }
+    .meta-field code { font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; background: var(--surface2); padding: 2px 6px; border-radius: 4px; color: #93C5FD; }
+    .preview-frame-wrap { background: #E8EDF2; border-radius: 12px; padding: 24px; border: 1px solid var(--border); }
+    .preview-label { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+    .email-frame { width: 100%; border: none; border-radius: 8px; background: #fff; display: block; min-height: 300px; }
+
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    .anim { animation: fadeIn .25s ease both; }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-row">
+        <div class="logo-badge">VP</div>
+        <div>
+          <div class="logo-title">V-POSH ICC</div>
+          <div class="logo-sub">Email Template Preview</div>
+        </div>
+      </div>
+      <div class="search-wrap">
+        <span class="search-icon">&#128269;</span>
+        <input id="searchInput" type="text" placeholder="Search templates..." />
+      </div>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav"></nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title" id="topbarTitle">Email Templates</div>
+        <div class="topbar-meta" id="topbarMeta">Select a template from the sidebar to preview it</div>
+      </div>
+      <div class="topbar-right" id="topbarRight">
+        <span class="count-chip">15 templates</span>
+      </div>
+    </div>
+    <div class="content-area" id="contentArea">
+      <div class="welcome" id="welcomeScreen">
+        <div class="welcome-icon">&#9993;&#65039;</div>
+        <h2>V-POSH Email Templates</h2>
+        <p>15 transactional email templates used by the ICC portal. Click any template in the sidebar or below to see a live preview rendered with sample data.</p>
+        <div class="templates-grid" id="quickGrid"></div>
+      </div>
+      <div id="previewPanels"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const BRAND = { product: 'V-POSH', institution: 'VIT-AP University', cell: 'Internal Complaints Committee (ICC)' };
+const TONES = { info: '#1E3A5F', success: '#1B5E42', warning: '#7A4500', critical: '#7B1D1D' };
+const TONE_TAG  = { info: 'tag-info', success: 'tag-success', warning: 'tag-warning', critical: 'tag-critical' };
+const TONE_DOT  = { info: '#3B82F6', success: '#10B981', warning: '#F59E0B', critical: '#EF4444' };
+const TONE_LABE = { info: 'Info', success: 'Success', warning: 'Warning', critical: 'Critical' };
+
+function esc(v) {
+  if (v == null) return '';
+  return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function fmtDate(v) {
+  const d = v ? new Date(v) : new Date();
+  return d.toLocaleString('en-IN', { timeZone:'Asia/Kolkata', day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) + ' IST';
+}
+
+function appUrl(p) { return 'https://vposh.vitap.ac.in' + p; }
+
+function rowsTable(rows) {
+  if (!rows || !rows.length) return '';
+  const cells = rows.filter(r => r && r[1] != null && r[1] !== '')
+    .map(([l, v], i) => `<tr style="background:${i % 2 === 0 ? '#F9FAFB' : '#FFFFFF'};"><td style="padding:9px 14px;color:#4B5563;font-size:11px;font-weight:600;vertical-align:top;white-space:nowrap;text-transform:uppercase;letter-spacing:.04em;width:38%;border-right:1px solid #E5E7EB;">${esc(l)}</td><td style="padding:9px 14px;color:#111827;font-size:13px;vertical-align:top;">${v}</td></tr>`).join('');
+  if (!cells) return '';
+  return `<div style="border:1px solid #D1D5DB;overflow:hidden;margin:18px 0;"><table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;">${cells}</table></div>`;
+}
+
+function layout({ heading, tone='info', greeting, intro, rows, paragraphs=[], ctaLabel, ctaUrl, banner, footerNote }) {
+  const accent = TONES[tone] || TONES.info;
+  const paras = (intro ? [intro] : []).concat(paragraphs);
+  const body = paras.map(p => `<p style="margin:0 0 14px;color:#374151;font-size:14px;line-height:1.75;font-family:Arial,Helvetica,sans-serif;">${p}</p>`).join('');
+  return `<div style="background:#F3F4F6;padding:28px 12px;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:620px;margin:0 auto;background:#FFFFFF;border:1px solid #D1D5DB;border-top:5px solid ${accent};">
+    <div style="padding:24px 32px 20px;border-bottom:1px solid #E5E7EB;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="vertical-align:middle;width:70px;padding-right:14px;">
+            <img src="/Users/manideepgonugunta/Desktop/vposh/client/public/vit-ap-logo.png" alt="VIT-AP University" width="64" style="display:block;max-height:54px;width:auto;" />
+          </td>
+          <td style="vertical-align:middle;">
+            <div style="color:#111827;font-size:15px;font-weight:700;letter-spacing:.2px;font-family:Georgia,'Times New Roman',serif;">${esc(BRAND.institution)}</div>
+            <div style="color:#6B7280;font-size:11.5px;margin-top:2px;">${esc(BRAND.cell)}</div>
+          </td>
+          <td style="vertical-align:top;text-align:right;padding-left:12px;">
+            <div style="color:#9CA3AF;font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;">OFFICIAL COMMUNICATION</div>
+            <div style="color:#6B7280;font-size:11px;margin-top:3px;">${fmtDate()}</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+    ${banner ? `<div style="background:${accent};color:#FFFFFF;padding:8px 32px;font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">${esc(banner)}</div>` : ''}
+    <div style="padding:28px 32px 24px;">
+      <h2 style="margin:0 0 20px;color:#111827;font-size:18px;font-weight:700;font-family:Georgia,'Times New Roman',serif;padding-bottom:12px;border-bottom:2px solid ${accent};">${esc(heading)}</h2>
+      ${greeting ? `<p style="margin:0 0 16px;color:#1F2937;font-size:14px;font-family:Arial,Helvetica,sans-serif;">Dear <strong>${esc(greeting)}</strong>,</p>` : ''}
+      ${body}
+      ${rowsTable(rows)}
+      ${ctaUrl ? `<div style="text-align:center;margin:28px 0 6px;"><a href="${esc(ctaUrl)}" style="display:inline-block;background:${accent};color:#FFFFFF;text-decoration:none;padding:12px 30px;font-size:13px;font-weight:700;letter-spacing:.04em;font-family:Arial,Helvetica,sans-serif;">${esc(ctaLabel||'Open the portal')}</a></div>` : ''}
+    </div>
+    <div style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:18px 32px;text-align:center;">
+      <p style="margin:0 0 4px;color:#374151;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">${BRAND.product} &mdash; ${esc(BRAND.institution)}</p>
+      <p style="margin:0 0 8px;color:#6B7280;font-size:11px;font-family:Arial,Helvetica,sans-serif;">${esc(BRAND.cell)} &bull; vposh@vitap.ac.in</p>
+      <p style="margin:0;color:#9CA3AF;font-size:10px;line-height:1.65;font-family:Arial,Helvetica,sans-serif;">${esc(footerNote||'This is an official communication from VIT-AP University. It is strictly confidential and intended solely for the named recipient. If received in error, please delete it and notify vposh@vitap.ac.in immediately.')}</p>
+    </div>
+  </div>
+</div>`;
+}
+
+const TEMPLATES = [
+  {
+    key: 'complaint_acknowledgement', label: 'Complaint Acknowledgement', tone: 'success',
+    audience: 'Complainant (student)', trigger: 'Student submits a complaint',
+    subject: 'Complaint Registered — ICC-2024-0042',
+    render: () => layout({ heading:'Complaint Successfully Registered', tone:'success', greeting:'Priya Sharma',
+      intro:'Your complaint has been officially registered with the Internal Complaints Committee (ICC). The reference ID below is what you should quote in every follow-up.',
+      rows:[['Reference ID','<strong>ICC-2024-0042</strong>'],['Title','Hostile work environment in lab sessions'],['Category','Hostile Work Environment'],['Priority','High'],['Status','Submitted'],['Registered on',fmtDate()]],
+      paragraphs:['Your identity is kept confidential. Only ICC members handling this case can see the details you filed.','Under the POSH Act, 2013 the committee aims to complete the inquiry within 90 days. You can follow every status change from your dashboard.'],
+      ctaLabel:'Track your complaint', ctaUrl:appUrl('/student/complaints') })
+  },
+  {
+    key: 'new_complaint_alert', label: 'New Complaint Alert', tone: 'info',
+    audience: 'ICC members & super admins', trigger: 'Any complaint is filed',
+    subject: '[New Case] ICC-2024-0042 — Hostile work environment in lab sessions',
+    render: () => layout({ heading:'A new complaint needs allocation', tone:'info', greeting:'Dr. Ramesh Kumar',
+      intro:'A complaint was filed by a student and is waiting in the ICC queue.',
+      rows:[['Reference ID','<strong>ICC-2024-0042</strong>'],['Title','Hostile work environment in lab sessions'],['Category','Hostile Work Environment'],['Priority','High'],['Filed by','Priya Sharma (student)'],['Department','Computer Science & Engineering'],['Filed on',fmtDate()],['SLA deadline','48 hours for acknowledgement']],
+      paragraphs:['Allocate the case to an officer so the statutory acknowledgement clock starts on time.'],
+      ctaLabel:'Open the allocation queue', ctaUrl:appUrl('/admin/allocation') })
+  },
+  {
+    key: 'case_assigned', label: 'Case Assignment', tone: 'info',
+    audience: 'Assigned ICC officer', trigger: 'Case allocated / reassigned',
+    subject: 'Case Assigned to You — ICC-2024-0042',
+    render: () => layout({ heading:'New case assignment', tone:'info', greeting:'Prof. Ananya Reddy',
+      intro:'The following complaint has been assigned to you by <strong>Dr. Ramesh Kumar</strong>.',
+      rows:[['Reference ID','<strong>ICC-2024-0042</strong>'],['Title','Hostile work environment in lab sessions'],['Category','Hostile Work Environment'],['Priority','High'],['Status','Acknowledged'],['Allocation mode','Manual'],['Statutory deadline','Acknowledgement due within 48 hours']],
+      paragraphs:['Please review the case, record your first action in the workspace, and keep the timeline updated — every entry is written to the tamper-evident audit ledger.'],
+      ctaLabel:'Open case workspace', ctaUrl:appUrl('/admin/complaints/ICC-2024-0042') })
+  },
+  {
+    key: 'status_update', label: 'Status Update', tone: 'info',
+    audience: 'Complainant (student)', trigger: 'ICC officer changes complaint status',
+    subject: 'Complaint Status Updated — ICC-2024-0042 (Under Investigation)',
+    render: () => layout({ heading:'Your complaint status has changed', tone:'info', greeting:'Priya Sharma',
+      intro:'The ICC committee has updated the status of your complaint.',
+      rows:[['Reference ID','<strong>ICC-2024-0042</strong>'],['Previous status','Acknowledged'],['New status','<strong>Under Investigation</strong>'],['Updated by','Prof. Ananya Reddy'],['Updated on',fmtDate()]],
+      paragraphs:['<em style="color:#475569;">"We have reviewed the initial submission and will be scheduling a preliminary meeting within the next week."</em>'],
+      ctaLabel:'View the case timeline', ctaUrl:appUrl('/student/complaints') })
+  },
+  {
+    key: 'resolution_summary', label: 'Resolution Summary', tone: 'success',
+    audience: 'Complainant (student)', trigger: 'Case status set to Resolved',
+    subject: 'Case Resolved — ICC-2024-0042',
+    render: () => layout({ heading:'Your complaint has been resolved', tone:'success', greeting:'Priya Sharma',
+      intro:'The Internal Complaints Committee has closed your complaint. The summary below is for your records.',
+      rows:[['Reference ID','<strong>ICC-2024-0042</strong>'],['Title','Hostile work environment in lab sessions'],['Outcome','Resolved — corrective action completed'],['Resolved by','Prof. Ananya Reddy'],['Resolved on',fmtDate()],['Time taken','18 days']],
+      paragraphs:['If you believe the resolution is inadequate, you may request a review through the ICC within the period stated in the institutional POSH policy. The portal also lets you share anonymous feedback about how the process treated you.'],
+      ctaLabel:'View the case and share feedback', ctaUrl:appUrl('/student/complaints'),
+      footerNote:'This summary is an institutional record of closure. Retain it for your reference. Confidential — ICC communication.' })
+  },
+  {
+    key: 'feedback_request', label: 'Feedback Request', tone: 'info',
+    audience: 'Complainant (student)', trigger: 'Sent after a case is resolved',
+    subject: 'How did we handle ICC-2024-0042?',
+    render: () => layout({ heading:'Your feedback shapes how the ICC works', tone:'info', greeting:'Priya Sharma',
+      intro:'Your case is closed. The committee would value a short, fully anonymous survey — it is not linked to your name or complaint ID in any report.',
+      rows:[['Reference ID','ICC-2024-0042'],['Survey length','4 quick questions, about a minute']],
+      paragraphs:['Feedback is voluntary and never affects the outcome of a case.'],
+      ctaLabel:'Give anonymous feedback', ctaUrl:appUrl('/student/feedback') })
+  },
+  {
+    key: 'official_update', label: 'Official Update', tone: 'info',
+    audience: 'Complainant (student)', trigger: 'ICC member posts a public update',
+    subject: 'Official Update — ICC-2024-0042',
+    render: () => layout({ heading:'An official update was posted on your case', tone:'info', greeting:'Priya Sharma',
+      intro:'<strong>Prof. Ananya Reddy</strong> posted an official update visible to you.',
+      rows:[['Reference ID','<strong>ICC-2024-0042</strong>'],['Posted by','Prof. Ananya Reddy'],['Posted on',fmtDate()]],
+      paragraphs:['<div style="background:#FFF;border-left:3px solid #0F172A;padding:12px 14px;border-radius:4px;color:#334155;font-size:14px;">We have completed the preliminary interviews and are now moving to the formal inquiry stage. You will receive another update within 7 working days.</div>'],
+      ctaLabel:'View the update thread', ctaUrl:appUrl('/student/complaints') })
+  },
+  {
+    key: 'sla_warning', label: 'SLA Deadline Warning', tone: 'warning',
+    audience: 'Assigned officer', trigger: 'Deadline within 48h warning window',
+    subject: '[Deadline Soon] ICC-2024-0042 — Inquiry Completion due in 36h',
+    render: () => layout({ heading:'A statutory deadline is approaching', tone:'warning', greeting:'Prof. Ananya Reddy',
+      intro:'The Inquiry Completion deadline for this case falls within the next 36 hours.',
+      rows:[['Reference ID','<strong>ICC-2024-0042</strong>'],['Title','Hostile work environment in lab sessions'],['Obligation','Inquiry Completion'],['Deadline',fmtDate(new Date(Date.now()+36*3600000))],['Current status','Under Investigation']],
+      paragraphs:['Record the pending action in the case timeline so the committee has an audit trail before the deadline lapses.'],
+      ctaLabel:'Act on this case', ctaUrl:appUrl('/admin/complaints/ICC-2024-0042') })
+  },
+  {
+    key: 'sla_breach_alert', label: 'SLA Breach Alert', tone: 'critical',
+    audience: 'Officer + super admins', trigger: 'Statutory deadline lapsed',
+    subject: '[SLA Breached] ICC-2024-0042 — Inquiry Completion',
+    render: () => layout({ heading:'Statutory deadline breached', tone:'critical', banner:'SLA BREACHED — Inquiry Completion', greeting:'Prof. Ananya Reddy',
+      intro:'This case has passed a deadline set by the POSH Act, 2013 and requires immediate action.',
+      rows:[['Reference ID','<strong>ICC-2024-0042</strong>'],['Title','Hostile work environment in lab sessions'],['Obligation','Inquiry Completion'],['Deadline was',fmtDate(new Date(Date.now()-2*86400000))],['Overdue by','2 day(s)'],['Assigned to','Prof. Ananya Reddy'],['Current status','Under Investigation']],
+      paragraphs:['Every day past this deadline is reportable in the annual POSH compliance return. Open the workspace and record the action taken.'],
+      ctaLabel:'Open case workspace', ctaUrl:appUrl('/admin/complaints/ICC-2024-0042') })
+  },
+  {
+    key: 'statutory_escalation', label: 'Statutory Escalation (L2)', tone: 'warning',
+    audience: 'Officer / ICC / admins (by level)', trigger: 'Escalation sweep finds breached milestone',
+    subject: '[L2 Escalation] ICC-2024-0042 — Inquiry not completed within 90 days',
+    render: () => layout({ heading:'Level 2 statutory escalation', tone:'warning', banner:'Level 2 of 3', greeting:'Dr. Ramesh Kumar',
+      intro:'A case in the ICC workspace has breached a milestone mandated by the POSH Act, 2013.',
+      rows:[['Reference ID','<strong>ICC-2024-0042</strong>'],['Title','Hostile work environment in lab sessions'],['Breach','Inquiry not completed within 90 days'],['Days overdue','5'],['Current status','Under Investigation'],['Assigned to','Prof. Ananya Reddy'],['Escalated on',fmtDate()]],
+      paragraphs:['Record the corrective action in the case workspace. Escalation events are written to the tamper-evident audit ledger and surface in statutory reports.'],
+      ctaLabel:'Open the escalated case', ctaUrl:appUrl('/admin/complaints/ICC-2024-0042') })
+  },
+  {
+    key: 'password_reset', label: 'Password Reset', tone: 'warning',
+    audience: 'Any portal user', trigger: 'User requests password reset',
+    subject: 'Reset your V-POSH password',
+    render: () => layout({ heading:'Password reset requested', tone:'warning', greeting:'Priya Sharma',
+      intro:'Use the button below to choose a new password. The link can be used once and expires shortly.',
+      rows:[['Requested from','49.36.105.22'],['Requested on',fmtDate()],['Valid for','30 minutes']],
+      paragraphs:['If you did not request this, ignore this email — your current password stays unchanged. Contact the ICC immediately if you see repeated reset attempts you did not make.'],
+      ctaLabel:'Set a new password', ctaUrl:appUrl('/reset-password?token=demo') })
+  },
+  {
+    key: 'account_provisioned', label: 'Welcome / Account Provisioned', tone: 'success',
+    audience: 'Newly created user', trigger: 'First-time signup or admin creates account',
+    subject: 'Welcome to V-POSH · VIT-AP',
+    render: () => layout({ heading:'Welcome to the V-POSH portal, Priya Sharma', tone:'success', greeting:'Priya Sharma',
+      intro:'Your account is active as <strong>Student</strong>. V-POSH is the VIT-AP University portal for raising and tracking Prevention of Sexual Harassment complaints with the Internal Complaints Committee.',
+      rows:[['Sign-in email','21BCE7489@vitap.ac.in'],['Role','Student'],['Student ID','21BCE7489'],['Department','Computer Science & Engineering'],['Account created via','Self-registration']],
+      paragraphs:['What you can do from here: raise a complaint with evidence, receive every committee update by email, follow the statutory timeline, and share anonymous feedback once a case closes. Your identity is never disclosed to the respondent.','Read the awareness section to understand what counts as harassment, what the law requires of the committee, and how the inquiry process works before you need it.'],
+      ctaLabel:'Open your dashboard', ctaUrl:appUrl('/'),
+      footerNote:'Never share this email. ICC correspondence is confidential and audited.' })
+  },
+  {
+    key: 'account_status_changed', label: 'Account Status Changed', tone: 'warning',
+    audience: 'Affected user', trigger: 'Admin enables / disables an account',
+    subject: 'V-POSH account deactivated',
+    render: () => layout({ heading:'Your portal access has been revoked', tone:'warning', greeting:'Vikram Nair',
+      intro:'Your V-POSH account has been deactivated. You can no longer sign in or access case records.',
+      rows:[['Account','vikram.nair@vitap.ac.in'],['New status','<strong>Disabled</strong>'],['Changed by','Super Admin'],['Effective',fmtDate()],['Reason','Administrative review pending']],
+      paragraphs:['If you believe this was a mistake, contact the ICC at vposh@vitap.ac.in. Case records you filed remain preserved either way.'],
+      footerNote:'Security notice from the V-POSH ICC Portal. Do not forward.' })
+  },
+  {
+    key: 'security_alert', label: 'Security Alert', tone: 'warning',
+    audience: 'Affected user', trigger: 'Password changed / unusual activity',
+    subject: 'Security alert — Password changed successfully',
+    render: () => layout({ heading:'Password changed successfully', tone:'warning', greeting:'Priya Sharma',
+      intro:'This is a security notice about your V-POSH account. You are receiving it because the change below was recorded.',
+      rows:[['Event','Password changed successfully'],['When',fmtDate()],['IP address','49.36.105.22'],['Device','Chrome 124 on macOS 14.4']],
+      paragraphs:['If this was not you, reset your password immediately and inform the ICC at vposh@vitap.ac.in so the session can be reviewed.'],
+      footerNote:'Security notice from the V-POSH ICC Portal. Do not forward.' })
+  },
+  {
+    key: 'faculty_filed_on_behalf', label: 'Complaint Filed On Your Behalf', tone: 'info',
+    audience: 'Named student', trigger: 'Faculty files complaint for a student',
+    subject: 'Complaint Filed On Your Behalf — ICC-2024-0043',
+    render: () => layout({ heading:'A complaint was filed on your behalf', tone:'info', greeting:'Riya Patel',
+      intro:'<strong>Dr. Meena Iyer</strong> from Computer Science &amp; Engineering has registered a POSH complaint in which you are the complainant.',
+      rows:[['Reference ID','<strong>ICC-2024-0043</strong>'],['Title','Inappropriate conduct during internship evaluation'],['Category','Sexual Harassment'],['Filed by','Dr. Meena Iyer'],['Filed on',fmtDate()]],
+      paragraphs:['You can follow the case, respond to the committee and add context from your own dashboard.','If you did not consent to this complaint being filed, tell the ICC straight away so the record can be corrected.'],
+      ctaLabel:'Open your dashboard', ctaUrl:appUrl('/student/complaints') })
+  },
+];
+
+const groups = {
+  'Complaint Lifecycle': ['complaint_acknowledgement','new_complaint_alert','case_assigned','status_update','resolution_summary'],
+  'Engagement':          ['feedback_request','official_update','faculty_filed_on_behalf'],
+  'SLA & Escalation':   ['sla_warning','sla_breach_alert','statutory_escalation'],
+  'Account & Security': ['password_reset','account_provisioned','account_status_changed','security_alert'],
+};
+
+function buildSidebar() {
+  const nav = document.getElementById('sidebarNav');
+  nav.innerHTML = '';
+  Object.entries(groups).forEach(([groupName, keys]) => {
+    const gl = document.createElement('div');
+    gl.className = 'nav-group-label';
+    gl.textContent = groupName;
+    nav.appendChild(gl);
+    keys.forEach(key => {
+      const t = TEMPLATES.find(x => x.key === key);
+      if (!t) return;
+      const item = document.createElement('div');
+      item.className = 'nav-item';
+      item.dataset.key = key;
+      item.innerHTML = `
+        <span class="nav-dot" style="background:${TONE_DOT[t.tone]};"></span>
+        <div class="nav-info">
+          <div class="nav-label">${t.label}</div>
+          <div class="nav-audience">${t.audience}</div>
+        </div>
+        <span class="tag ${TONE_TAG[t.tone]} nav-badge">${TONE_LABE[t.tone]}</span>`;
+      item.addEventListener('click', () => selectTemplate(key));
+      nav.appendChild(item);
+    });
+  });
+}
+
+function buildQuickGrid() {
+  const grid = document.getElementById('quickGrid');
+  TEMPLATES.forEach(t => {
+    const tile = document.createElement('div');
+    tile.className = 'quick-tile';
+    tile.innerHTML = `<div class="quick-tile-dot" style="background:${TONE_DOT[t.tone]};"></div><div class="quick-tile-label">${t.label}</div><div class="quick-tile-sub">${t.audience}</div>`;
+    tile.addEventListener('click', () => selectTemplate(t.key));
+    grid.appendChild(tile);
+  });
+}
+
+function buildPanels() {
+  const container = document.getElementById('previewPanels');
+  TEMPLATES.forEach(t => {
+    const panel = document.createElement('div');
+    panel.className = 'email-container';
+    panel.id = `panel-${t.key}`;
+    panel.innerHTML = `
+      <div class="email-meta-card anim">
+        <div class="meta-field"><label>Template Key</label><code>${t.key}</code></div>
+        <div class="meta-field"><label>Audience</label><span>${t.audience}</span></div>
+        <div class="meta-field"><label>Trigger</label><span>${t.trigger}</span></div>
+        <div class="meta-field"><label>Subject Line</label><span>${t.subject}</span></div>
+      </div>
+      <div class="preview-frame-wrap anim">
+        <div class="preview-label">&#128231; Live Preview &mdash; rendered with sample data</div>
+        <iframe class="email-frame" id="frame-${t.key}" scrolling="no"></iframe>
+      </div>`;
+    container.appendChild(panel);
+
+    requestAnimationFrame(() => {
+      const frame = document.getElementById(`frame-${t.key}`);
+      if (!frame) return;
+      const doc = frame.contentDocument || frame.contentWindow.document;
+      doc.open();
+      doc.write('<!DOCTYPE html><html><head><style>body{margin:0;padding:0;}</style></head><body>' + t.render() + '</body></html>');
+      doc.close();
+      const resize = () => { frame.style.height = (doc.body.scrollHeight + 4) + 'px'; };
+      setTimeout(resize, 200);
+    });
+  });
+}
+
+function selectTemplate(key) {
+  const t = TEMPLATES.find(x => x.key === key);
+  if (!t) return;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.key === key));
+  document.getElementById('welcomeScreen').style.display = 'none';
+  document.querySelectorAll('.email-container').forEach(el => el.classList.remove('visible'));
+  const panel = document.getElementById('panel-' + key);
+  if (panel) panel.classList.add('visible');
+  document.getElementById('topbarTitle').textContent = t.label;
+  document.getElementById('topbarMeta').textContent = 'Trigger: ' + t.trigger;
+  document.getElementById('topbarRight').innerHTML = `<span class="tag ${TONE_TAG[t.tone]}">${TONE_LABE[t.tone]}</span><span class="count-chip">#${TEMPLATES.indexOf(t)+1} / 15</span>`;
+}
+
+document.getElementById('searchInput').addEventListener('input', function () {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('.nav-item').forEach(el => {
+    const t = TEMPLATES.find(x => x.key === el.dataset.key);
+    const match = !q || t.label.toLowerCase().includes(q) || t.audience.toLowerCase().includes(q) || t.trigger.toLowerCase().includes(q);
+    el.style.display = match ? '' : 'none';
+  });
+  document.querySelectorAll('.nav-group-label').forEach(gl => {
+    let next = gl.nextElementSibling, allHidden = true;
+    while (next && !next.classList.contains('nav-group-label')) {
+      if (next.style.display !== 'none') { allHidden = false; break; }
+      next = next.nextElementSibling;
+    }
+    gl.style.display = allHidden ? 'none' : '';
+  });
+});
+
+buildSidebar();
+buildQuickGrid();
+buildPanels();
+</script>
+</body>
+</html>

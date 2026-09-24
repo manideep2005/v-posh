@@ -321,7 +321,7 @@ export default function StudentLogin() {
               ) : (
                 <>
                   <div style={{
-                    background: '#fff', borderRadius: '12px', padding: '1.25rem',
+                    background: 'var(--color-slate-50)', borderRadius: '12px', padding: '1.25rem',
                     display: 'inline-block', marginBottom: '0.75rem',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
                   }}>

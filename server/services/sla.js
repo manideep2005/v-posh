@@ -1,6 +1,7 @@
 const db = require('../db');
+const config = require('../config');
 const { logAuditAction } = require('../middleware/audit');
-const { sendEmail } = require('./email');
+const { sendService } = require('./email');
 
 // SLA thresholds (in hours)
 const SLA_THRESHOLDS = {
@@ -76,17 +77,73 @@ function getSLAStatus(complaint) {
   };
 }
 
+/**
+ * Has this service already emailed about this complaint in the last `hours`?
+ * Keeps the hourly SLA sweep from repeating the same warning to an officer.
+ */
+async function wasEmailedRecently(service, complaintId, hours) {
+  try {
+    const since = Date.now() - hours * 60 * 60 * 1000;
+    const entries = await db.emailLog.find(e =>
+      e.service === service &&
+      e.meta && e.meta.complaintId === complaintId &&
+      new Date(e.createdAt).getTime() >= since
+    );
+    return entries.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Escalating SLA warnings go to the assigned officer and the ICC mailbox. */
+async function warningRecipients(complaint) {
+  const recipients = [];
+  if (complaint.assignedAdminId) {
+    const officer = await db.users.findById(complaint.assignedAdminId);
+    if (officer && officer.email) recipients.push({ email: officer.email, name: officer.name });
+  }
+  if (!recipients.length && config.ICC_NOTIFICATION_EMAIL) {
+    recipients.push({ email: config.ICC_NOTIFICATION_EMAIL, name: 'ICC Committee' });
+  }
+  return recipients;
+}
+
 // Auto-escalate complaints that have breached SLA
 async function checkAndEscalate() {
   try {
     const complaints = await db.complaints.find();
     const now = new Date();
     let escalated = 0;
+    let warned = 0;
 
     for (const complaint of complaints) {
       if (complaint.status === 'Resolved') continue;
 
       const sla = getSLAStatus(complaint);
+
+      // 1) Deadline approaching — warn the owner once per 24h window.
+      if (sla.status === 'critical' || sla.status === 'warning') {
+        if (!(await wasEmailedRecently('sla_warning', complaint.id, 24))) {
+          for (const recipient of await warningRecipients(complaint)) {
+            sendService('sla_warning', {
+              to: recipient.email,
+              data: {
+                officerName: recipient.name,
+                referenceId: complaint.referenceId,
+                title: complaint.title,
+                slaLabel: sla.label,
+                deadline: sla.deadline,
+                hoursRemaining: sla.hoursRemaining,
+                status: complaint.status,
+              },
+              meta: { complaintId: complaint.id },
+            }).catch(err => console.error('[Email] SLA warning failed:', err.message));
+          }
+          warned++;
+        }
+        continue;
+      }
+
       if (sla.status !== 'breached') continue;
 
       // Check if already escalated recently (within 24 hours)
@@ -133,11 +190,47 @@ async function checkAndEscalate() {
         });
       }
 
+      // Email the breach to the officer and every super admin (one mail each).
+      const breachRecipients = new Map();
+      if (complaint.assignedAdminId) {
+        const officer = await db.users.findById(complaint.assignedAdminId);
+        if (officer && officer.email) breachRecipients.set(officer.email, officer.name);
+      }
+      for (const sa of superAdmins) {
+        if (sa.email) breachRecipients.set(sa.email, sa.name);
+      }
+      if (config.ICC_NOTIFICATION_EMAIL) breachRecipients.set(config.ICC_NOTIFICATION_EMAIL, 'ICC Committee');
+
+      const overdueHours = Math.max(0, Math.round(
+        (now - new Date(sla.deadline)) / (1000 * 60 * 60)
+      ));
+
+      for (const [email, name] of breachRecipients) {
+        sendService('sla_breach_alert', {
+          to: email,
+          data: {
+            recipientName: name,
+            referenceId: complaint.referenceId,
+            title: complaint.title,
+            slaLabel: sla.label,
+            deadline: sla.deadline,
+            daysOverdue: Math.floor(overdueHours / 24),
+            overdueLabel: `${overdueHours}h past the ${sla.label} deadline`,
+            assignedTo: complaint.assignedAdminName || 'Unassigned',
+            status: complaint.status,
+          },
+          meta: { complaintId: complaint.id },
+        }).catch(err => console.error('[Email] SLA breach alert failed:', err.message));
+      }
+
       escalated++;
     }
 
     if (escalated > 0) {
       console.log(`[SLA] Auto-escalated ${escalated} complaint(s)`);
+    }
+    if (warned > 0) {
+      console.log(`[SLA] Sent deadline warnings for ${warned} complaint(s)`);
     }
     return escalated;
   } catch (err) {

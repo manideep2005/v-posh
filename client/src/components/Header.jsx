@@ -2,7 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
-import { LogOut, Menu, X, ChevronDown } from 'lucide-react';
+import DarkModeToggle from './DarkModeToggle';
+import {
+  LogOut, Menu, X, ChevronDown, LayoutDashboard, FileText, FolderOpen,
+  Users, GraduationCap, BarChart3, UserCog, Megaphone, ScrollText, Settings,
+} from 'lucide-react';
 
 function LoginDropdown() {
   const [open, setOpen] = useState(false);
@@ -41,13 +45,13 @@ function LoginDropdown() {
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: '260px',
-          background: '#fff', border: '1px solid var(--color-slate-200)', borderRadius: 'var(--radius-sm)',
-          boxShadow: '0 12px 48px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', zIndex: 50, overflow: 'hidden',
+          background: 'var(--color-slate-100)', border: '1px solid var(--color-slate-200)', borderRadius: 'var(--radius-sm)',
+          boxShadow: '0 10px 34px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.05)', zIndex: 50, overflow: 'hidden',
         }}>
           <div style={{ padding: '0.65rem 1rem', borderBottom: '1px solid var(--color-slate-100)', fontSize: '0.7rem', fontWeight: '700', color: 'var(--color-slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Select your role
           </div>
-          {roles.map((r, i) => (
+          {roles.map((r) => (
             <Link key={r.label} to={r.path} style={{
               display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.7rem 1rem',
               textDecoration: 'none', fontSize: '0.875rem', position: 'relative',
@@ -82,6 +86,132 @@ function LoginDropdown() {
   );
 }
 
+/**
+ * A grouped header destination set.
+ *
+ * ICC and super-admin accounts have a dozen destinations — more than a single
+ * header row can hold on a laptop. Grouping them into menus keeps the header a
+ * fixed, predictable height instead of letting links wrap into the page.
+ */
+function NavMenu({ label, items, isActive }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const loc = useLocation();
+  const anyActive = items.some(i => isActive(i.to));
+
+  useEffect(() => { setOpen(false); }, [loc.pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="nav-menu" ref={ref}>
+      <button
+        type="button"
+        className={`nav-menu-btn${anyActive ? ' nav-menu-btn--active' : ''}`}
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={() => setOpen(o => !o)}
+      >
+        {label}
+        <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
+      </button>
+      {open && (
+        <div className="nav-menu-panel" role="menu">
+          {items.map(item => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                role="menuitem"
+                className={isActive(item.to) ? 'active' : ''}
+                onClick={() => setOpen(false)}
+              >
+                {Icon && <Icon size={15} style={{ flexShrink: 0, opacity: 0.75 }} />}
+                <span>
+                  {item.label}
+                  {item.desc && <small>{item.desc}</small>}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One definition of the navigation, rendered by both the desktop and mobile navs. */
+function buildNav(user) {
+  const links = [
+    { to: '/', label: 'Home', exact: true },
+    { to: '/awareness', label: 'POSH Guidelines & Policies' },
+  ];
+  const menus = [];
+  let cta = null;
+
+  if (!user) return { links, menus, cta };
+
+  if (user.role === 'student') {
+    menus.push({
+      label: 'My Cases',
+      items: [
+        { to: '/student/dashboard', label: 'My Dashboard', icon: LayoutDashboard, desc: 'Case tracker and deadlines' },
+        { to: '/student/complaints', label: 'Track Complaints', icon: FileText, desc: 'Every case you filed' },
+        { to: '/student/profile', label: 'My Profile', icon: GraduationCap, desc: 'Roll number and contact' },
+      ],
+    });
+    cta = { to: '/student/complaints/new', label: 'Raise Complaint' };
+  } else if (user.role === 'faculty') {
+    menus.push({
+      label: 'My Department',
+      items: [
+        { to: '/faculty/dashboard', label: 'Dashboard', icon: LayoutDashboard, desc: 'Compliance clock and cases' },
+        { to: '/faculty/complaints', label: 'Department Cases', icon: FileText, desc: 'Grievances from your students' },
+        { to: '/faculty/students', label: 'Students', icon: Users, desc: 'Directory and case counts' },
+        { to: '/faculty/profile', label: 'My Profile', icon: GraduationCap, desc: 'Designation and password' },
+      ],
+    });
+    cta = { to: '/faculty/complaints/new', label: 'File Complaint' };
+  } else if (user.role === 'admin' || user.role === 'super_admin') {
+    menus.push({
+      label: 'ICC Workspace',
+      items: [
+        { to: '/admin/dashboard', label: 'Case Command Centre', icon: LayoutDashboard, desc: 'Live queue, SLAs and breaches' },
+        { to: '/admin/complaints', label: 'All Complaints', icon: FileText, desc: 'Search, filter and open cases' },
+        { to: '/admin/case-allocation', label: 'Case Allocation', icon: FolderOpen, desc: 'Assign inquiry teams' },
+        { to: '/admin/students', label: 'Student Directory', icon: GraduationCap, desc: 'Complainants and respondents' },
+        { to: '/admin/faculty', label: 'Faculty Directory', icon: Users, desc: 'Staff records and cases' },
+      ],
+    });
+  }
+
+  if (user.role === 'super_admin') {
+    menus.push({
+      label: 'Administration',
+      items: [
+        { to: '/super-admin/workload', label: 'Workload Analytics', icon: BarChart3, desc: 'Officer caseload balance' },
+        { to: '/super-admin/admins', label: 'Manage Staff', icon: UserCog, desc: 'ICC roles and access' },
+        { to: '/super-admin/announcements', label: 'Announcements', icon: Megaphone, desc: 'Broadcast to the campus' },
+        { to: '/super-admin/audit-logs', label: 'Audit Logs', icon: ScrollText, desc: 'Tamper-evident activity trail' },
+        { to: '/super-admin/settings', label: 'Settings', icon: Settings, desc: 'Platform policy and SLAs' },
+      ],
+    });
+  }
+
+  return { links, menus, cta };
+}
+
 export default function Header() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -98,14 +228,25 @@ export default function Header() {
     return () => document.removeEventListener('click', close);
   }, [menuOpen]);
 
-  const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
+  const isActive = (path, exact = false) => (
+    exact ? location.pathname === path : (location.pathname === path || location.pathname.startsWith(path + '/'))
+  );
+
+  const { links, menus, cta } = buildNav(user);
+
+  // The mobile panel keeps every destination flat so nothing hides behind a tap.
+  const mobileItems = [
+    ...links.map(l => ({ to: l.to, label: l.label, exact: l.exact })),
+    ...menus.flatMap(m => m.items.map(i => ({ to: i.to, label: i.label }))),
+    ...(cta ? [{ to: cta.to, label: `+ ${cta.label}` }] : []),
+  ];
 
   return (
-    <header className="inst-header">
+    <header className={`inst-header${user ? ' is-authed' : ''}`}>
       <div className="container nav-bar">
         {/* Brand */}
         <Link to="/" className="brand" onClick={() => setMenuOpen(false)}>
-          <div className="brand-logo-container" style={{ background: '#FFFFFF', padding: '4px 10px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}>
+          <div className="brand-logo-container" style={{ padding: '4px 10px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}>
             <img
               src="/vit-ap-logo.png"
               alt="VIT-AP University Logo"
@@ -121,7 +262,7 @@ export default function Header() {
           </div>
         </Link>
 
-        {/* Hamburger toggle — mobile only */}
+        {/* Hamburger toggle — narrow layouts only */}
         <button
           className="hamburger-btn"
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
@@ -134,44 +275,34 @@ export default function Header() {
         {/* Desktop nav */}
         <nav className="desktop-nav">
           <ul className="nav-links">
-            <li><Link to="/" className={location.pathname === '/' ? 'active' : ''}>Home</Link></li>
-            <li><Link to="/awareness" className={isActive('/awareness') ? 'active' : ''}>POSH Guidelines &amp; Policies</Link></li>
+            {links.map(l => (
+              <li key={l.to}>
+                <Link to={l.to} className={isActive(l.to, l.exact) ? 'active' : ''}>{l.label}</Link>
+              </li>
+            ))}
 
-            {user && user.role === 'student' && (<>
-              <li><Link to="/student/dashboard" className={isActive('/student/dashboard') ? 'active' : ''}>My Dashboard</Link></li>
-              <li><Link to="/student/complaints" className={isActive('/student/complaints') ? 'active' : ''}>Track Complaints</Link></li>
-              <li><Link to="/student/complaints/new" className="btn btn-emerald btn-sm" style={{ textDecoration: 'none' }}>+ Raise Complaint</Link></li>
-            </>)}
+            {menus.map(m => (
+              <li key={m.label}>
+                <NavMenu label={m.label} items={m.items} isActive={isActive} />
+              </li>
+            ))}
 
-            {user && user.role === 'faculty' && (<>
-              <li><Link to="/faculty/dashboard" className={isActive('/faculty/dashboard') ? 'active' : ''}>Dashboard</Link></li>
-              <li><Link to="/faculty/complaints" className={isActive('/faculty/complaints') ? 'active' : ''}>Department Cases</Link></li>
-              <li><Link to="/faculty/complaints/new" className="btn btn-emerald btn-sm" style={{ textDecoration: 'none' }}>+ File Complaint</Link></li>
-              <li><Link to="/faculty/students" className={isActive('/faculty/students') ? 'active' : ''}>Students</Link></li>
-            </>)}
-
-            {user && (user.role === 'admin' || user.role === 'super_admin') && (<>
-              <li><Link to="/admin/dashboard" className={isActive('/admin/dashboard') ? 'active' : ''}>ICC Workspace</Link></li>
-              <li><Link to="/admin/complaints" className={isActive('/admin/complaints') ? 'active' : ''}>All Complaints</Link></li>
-              <li><Link to="/admin/case-allocation" className={isActive('/admin/case-allocation') ? 'active' : ''}>Case Allocation</Link></li>
-              <li><Link to="/admin/students" className={isActive('/admin/students') ? 'active' : ''}>Student Directory</Link></li>
-              <li><Link to="/admin/faculty" className={isActive('/admin/faculty') ? 'active' : ''}>Faculty</Link></li>
-            </>)}
-
-            {user && user.role === 'super_admin' && (<>
-              <li><Link to="/super-admin/workload" className={isActive('/super-admin/workload') ? 'active' : ''}>Workload Analytics</Link></li>
-              <li><Link to="/super-admin/admins" className={isActive('/super-admin/admins') ? 'active' : ''}>Manage Staff</Link></li>
-              <li><Link to="/super-admin/announcements" className={isActive('/super-admin/announcements') ? 'active' : ''}>Announcements</Link></li>
-              <li><Link to="/super-admin/audit-logs" className={isActive('/super-admin/audit-logs') ? 'active' : ''}>Audit Logs</Link></li>
-              <li><Link to="/super-admin/settings" className={isActive('/super-admin/settings') ? 'active' : ''}>Settings</Link></li>
-            </>)}
+            {cta && (
+              <li>
+                <Link to={cta.to} className="btn btn-emerald btn-sm" style={{ textDecoration: 'none' }}>+ {cta.label}</Link>
+              </li>
+            )}
 
             {!user ? (
-              <li style={{ position: 'relative' }} className="login-dropdown-wrapper">
-                <LoginDropdown />
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <DarkModeToggle />
+                <div style={{ position: 'relative' }} className="login-dropdown-wrapper">
+                  <LoginDropdown />
+                </div>
               </li>
             ) : (
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: '0.5rem' }}>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <DarkModeToggle />
                 <NotificationBell />
                 <span className="role-badge" title={`Role: ${user.role}`}>{user.role}</span>
                 <button onClick={logout} className="btn btn-secondary btn-sm" title="Logout">
@@ -186,37 +317,11 @@ export default function Header() {
       {/* Mobile slide-down nav */}
       <nav className={`mobile-nav${menuOpen ? ' mobile-nav--open' : ''}`} onClick={(e) => e.stopPropagation()}>
         <ul className="mobile-nav-links">
-          <li><Link to="/" className={location.pathname === '/' ? 'active' : ''}>Home</Link></li>
-          <li><Link to="/awareness" className={isActive('/awareness') ? 'active' : ''}>POSH Guidelines &amp; Policies</Link></li>
-
-          {user && user.role === 'student' && (<>
-            <li><Link to="/student/dashboard" className={isActive('/student/dashboard') ? 'active' : ''}>My Dashboard</Link></li>
-            <li><Link to="/student/complaints" className={isActive('/student/complaints') ? 'active' : ''}>Track Complaints</Link></li>
-            <li><Link to="/student/complaints/new" className={isActive('/student/complaints/new') ? 'active' : ''}>+ Raise Complaint</Link></li>
-          </>)}
-
-          {user && user.role === 'faculty' && (<>
-            <li><Link to="/faculty/dashboard" className={isActive('/faculty/dashboard') ? 'active' : ''}>Dashboard</Link></li>
-            <li><Link to="/faculty/complaints" className={isActive('/faculty/complaints') ? 'active' : ''}>Department Cases</Link></li>
-            <li><Link to="/faculty/complaints/new" className={isActive('/faculty/complaints/new') ? 'active' : ''}>+ File Complaint</Link></li>
-            <li><Link to="/faculty/students" className={isActive('/faculty/students') ? 'active' : ''}>Students</Link></li>
-          </>)}
-
-          {user && (user.role === 'admin' || user.role === 'super_admin') && (<>
-            <li><Link to="/admin/dashboard" className={isActive('/admin/dashboard') ? 'active' : ''}>ICC Workspace</Link></li>
-            <li><Link to="/admin/complaints" className={isActive('/admin/complaints') ? 'active' : ''}>All Complaints</Link></li>
-            <li><Link to="/admin/case-allocation" className={isActive('/admin/case-allocation') ? 'active' : ''}>Case Allocation</Link></li>
-            <li><Link to="/admin/students" className={isActive('/admin/students') ? 'active' : ''}>Student Directory</Link></li>
-            <li><Link to="/admin/faculty" className={isActive('/admin/faculty') ? 'active' : ''}>Faculty</Link></li>
-          </>)}
-
-          {user && user.role === 'super_admin' && (<>
-            <li><Link to="/super-admin/workload" className={isActive('/super-admin/workload') ? 'active' : ''}>Workload Analytics</Link></li>
-            <li><Link to="/super-admin/admins" className={isActive('/super-admin/admins') ? 'active' : ''}>Manage Staff</Link></li>
-            <li><Link to="/super-admin/announcements" className={isActive('/super-admin/announcements') ? 'active' : ''}>Announcements</Link></li>
-            <li><Link to="/super-admin/audit-logs" className={isActive('/super-admin/audit-logs') ? 'active' : ''}>Audit Logs</Link></li>
-            <li><Link to="/super-admin/settings" className={isActive('/super-admin/settings') ? 'active' : ''}>Settings</Link></li>
-          </>)}
+          {mobileItems.map(item => (
+            <li key={item.to}>
+              <Link to={item.to} className={isActive(item.to, item.exact) ? 'active' : ''}>{item.label}</Link>
+            </li>
+          ))}
 
           {!user ? (
             <li className="mobile-nav-auth">
@@ -227,15 +332,16 @@ export default function Header() {
               <Link to="/super-admin/login" className="btn btn-primary" style={{ textDecoration: 'none', width: '100%', justifyContent: 'center', fontSize: '0.8125rem' }}>Super Admin</Link>
             </li>
           ) : (
-            <li className="mobile-nav-auth">
-              <button onClick={() => { logout(); setMenuOpen(false); }} className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>
-                <LogOut size={14} /> Logout ({user.name || user.role})
-              </button>
-            </li>
+            <>
+              <li className="mobile-nav-auth">
+                <button onClick={() => { logout(); setMenuOpen(false); }} className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>
+                  <LogOut size={14} /> Logout ({user.name || user.role})
+                </button>
+              </li>
+            </>
           )}
         </ul>
       </nav>
     </header>
   );
 }
-

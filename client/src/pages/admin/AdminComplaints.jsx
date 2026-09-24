@@ -2,15 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, formatDate } from '../../utils/api';
 import StatusBadge from '../../components/StatusBadge';
-import { Search } from 'lucide-react';
+import { Search, FileText, ArrowRight, Download, CheckSquare, RefreshCw } from 'lucide-react';
 
 const PAGE_SIZE = 20;
+
+// Some student records store the roll number inside `studentName`
+// (e.g. "HASINI PASUNOORI 23MIS7263"). Split it out so the table does not
+// print the roll number twice.
+function splitStudentName(fullName, rollNo) {
+  const name = (fullName || '').trim();
+  if (!rollNo) return { displayName: name, rest: '' };
+  const displayName = name.replace(rollNo, '').replace(/\s{2,}/g, ' ').trim();
+  return { displayName: displayName || name, rest: rollNo };
+}
 
 export default function AdminComplaints() {
   const [complaints, setComplaints] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [bulkMsg, setBulkMsg] = useState('');
 
   const [filters, setFilters] = useState({
     status: 'ALL',
@@ -70,22 +84,81 @@ export default function AdminComplaints() {
     return pages;
   };
 
+  // ── Bulk selection ─────────────────────────────────────────────────────────
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === complaints.length) { setSelectedIds(new Set()); }
+    else { setSelectedIds(new Set(complaints.map(c => c.id))); }
+  };
+
+  const handleBulkStatus = async () => {
+    if (!bulkStatus || !selectedIds.size) return;
+    setBulkMsg('');
+    let ok = 0, fail = 0;
+    for (const id of selectedIds) {
+      try {
+        const res = await apiFetch(`/admin/complaints/${id}/status`, {
+          method: 'PUT', body: JSON.stringify({ status: bulkStatus }),
+        });
+        if (res.success) ok++; else fail++;
+      } catch { fail++; }
+    }
+    setBulkMsg(`${ok} updated, ${fail} failed.`);
+    setSelectedIds(new Set());
+    setBulkStatus('');
+    fetchComplaints();
+  };
+
+  // ── CSV export ─────────────────────────────────────────────────────────────
+  const exportCSV = () => {
+    const header = ['Ref ID','Student','Category','Priority','Status','Assigned Officer','Registered','Deadline'];
+    const rows = complaints.map(c => [
+      c.referenceId,
+      c.studentName || '',
+      c.category || '',
+      c.priority || '',
+      c.status || '',
+      c.assignedAdminName || '',
+      c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '',
+      c.slaDeadline ? new Date(c.slaDeadline).toLocaleDateString() : '',
+    ]);
+    const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `complaints-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="container" style={{ padding: '2.5rem 1.5rem' }}>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--color-navy-900)' }}>
-          Complaint Repository
-        </h1>
-        <p style={{ color: 'var(--color-slate-600)', fontSize: '0.875rem', marginTop: '0.2rem' }}>
-          Search, filter, assign, and manage institutional grievance cases
-        </p>
+    <div className="container page">
+      <div className="page-head">
+        <div className="page-head-main">
+          <h1><FileText size={22} /> Complaint Repository</h1>
+          <p className="page-sub">
+            Search, filter, assign and manage institutional grievance cases.
+          </p>
+        </div>
+        <div className="page-actions">
+          <span className="toolbar-meta">{total} record{total === 1 ? '' : 's'}</span>
+          <button onClick={exportCSV} className="btn btn-secondary btn-sm">
+            <Download size={14} /> Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Filter Toolbar */}
       <div className="panel" style={{ padding: '1.25rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', alignItems: 'end' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label htmlFor="search" style={{ fontSize: '0.75rem' }}>Search Reference / Name / Roll No</label>
+            <label htmlFor="search" className="field-label">Search Reference / Name / Roll No</label>
             <input
               id="search"
               name="search"
@@ -98,7 +171,7 @@ export default function AdminComplaints() {
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label htmlFor="status" style={{ fontSize: '0.75rem' }}>Status Filter</label>
+            <label htmlFor="status" className="field-label">Status Filter</label>
             <select id="status" name="status" className="form-control" value={filters.status} onChange={handleFilterChange}>
               <option value="ALL">All Statuses</option>
               <option value="Submitted">Submitted</option>
@@ -111,7 +184,7 @@ export default function AdminComplaints() {
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label htmlFor="priority" style={{ fontSize: '0.75rem' }}>Priority Filter</label>
+            <label htmlFor="priority" className="field-label">Priority Filter</label>
             <select id="priority" name="priority" className="form-control" value={filters.priority} onChange={handleFilterChange}>
               <option value="ALL">All Priorities</option>
               <option value="Urgent">Urgent</option>
@@ -122,7 +195,7 @@ export default function AdminComplaints() {
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label htmlFor="department" style={{ fontSize: '0.75rem' }}>Department Filter</label>
+            <label htmlFor="department" className="field-label">Department Filter</label>
             <select id="department" name="department" className="form-control" value={filters.department} onChange={handleFilterChange}>
               <option value="ALL">All Departments</option>
               <option value="Computer Science & Engineering">Computer Science</option>
@@ -141,78 +214,134 @@ export default function AdminComplaints() {
       {/* Complaints Data Table */}
       <div className="panel">
         <div className="panel-header">
-          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--color-navy-900)' }}>
-            Showing <strong>{complaints.length}</strong> of <strong>{total}</strong> records
-          </div>
+          <h3 className="panel-title" style={{ fontSize: '0.9375rem' }}>
+            <FileText size={16} /> Case records
+          </h3>
+          <span className="toolbar-meta">
+            Showing {complaints.length} of {total}
+          </span>
         </div>
 
         {loading ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-slate-600)' }}>Updating complaints list…</div>
+          <div className="loading-block"><span className="spinner" /> Updating complaints list…</div>
         ) : complaints.length === 0 ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-slate-600)' }}>
-            No complaints match the specified filter criteria.
+          <div className="empty-state">
+            <Search size={30} />
+            <strong>No complaints match these filters</strong>
+            <p>Try a different status, priority or department.</p>
           </div>
         ) : (
+          <>
+          {selectedIds.size > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', padding: '0.75rem 1rem', background: 'var(--color-emerald-50)', border: '1px solid #A7F3D0', borderRadius: 'var(--radius-sm)', flexWrap: 'wrap' }}>
+              <CheckSquare size={15} style={{ color: 'var(--color-emerald-700)' }} />
+              <strong style={{ fontSize: '0.8125rem', color: 'var(--color-emerald-900)' }}>{selectedIds.size} selected</strong>
+              <select value={bulkStatus} onChange={e => setBulkStatus(e.target.value)} className="form-control" style={{ width: 160, padding: '0.35rem 0.5rem', fontSize: '0.8125rem' }}>
+                <option value="">Bulk status…</option>
+                <option value="Submitted">Submitted</option>
+                <option value="Acknowledged">Acknowledged</option>
+                <option value="Under Review">Under Review</option>
+                <option value="Resolved">Resolved</option>
+              </select>
+              <button onClick={handleBulkStatus} disabled={!bulkStatus} className="btn btn-emerald btn-sm">
+                <RefreshCw size={13} /> Apply
+              </button>
+              <button onClick={() => setSelectedIds(new Set())} className="btn btn-secondary btn-sm">Clear</button>
+              {bulkMsg && <span style={{ fontSize: '0.75rem', color: 'var(--color-emerald-700)' }}>{bulkMsg}</span>}
+            </div>
+          )}
+
           <div className="table-container">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Ref ID</th>
-                  <th>Student & Roll No</th>
-                  <th>Department</th>
-                  <th>Category</th>
+                  <th style={{ width: 36, padding: '0.5rem' }}>
+                    <input type="checkbox" checked={selectedIds.size === complaints.length && complaints.length > 0} onChange={toggleSelectAll} aria-label="Select all" style={{ accentColor: 'var(--color-emerald-700)' }} />
+                  </th>
+                  <th className="nowrap">Ref ID</th>
+                  <th>Student</th>
+                  <th className="hide-xl">Category</th>
                   <th>Priority</th>
                   <th>Status</th>
-                  <th>Assigned Officer</th>
-                  <th>Registered Date</th>
+                  <th className="hide-lg">Assigned officer</th>
+                  <th className="hide-md">Deadline</th>
+                  <th className="hide-md nowrap">Registered</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {complaints.map(c => (
+                {complaints.map(c => {
+                  const { displayName, rest } = splitStudentName(c.studentName, c.studentRollNo);
+                  return (
                   <tr key={c.id}>
-                    <td style={{ fontWeight: '700', color: 'var(--color-navy-900)', fontFamily: 'monospace' }}>
+                    <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                      <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleSelect(c.id)} aria-label={`Select ${c.referenceId}`} style={{ accentColor: 'var(--color-emerald-700)' }} />
+                    </td>
+                    <td className="cell-mono nowrap" style={{ color: 'var(--color-navy-900)', fontWeight: 600 }}>
                       {c.referenceId}
                     </td>
                     <td>
-                      <div style={{ fontWeight: '600', color: 'var(--color-slate-900)' }}>{c.studentName}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)' }}>{c.studentRollNo}</div>
+                      <div className="cell-stack">
+                        <span className="cell-strong">{displayName}</span>
+                        <span className="cell-muted truncate" style={{ maxWidth: '210px' }} title={`${rest} • ${c.studentDept || ''}`}>
+                          {rest}{c.studentDept ? ` • ${c.studentDept}` : ''}
+                        </span>
+                      </div>
                     </td>
-                    <td>{c.studentDept}</td>
-                    <td style={{ maxWidth: '160px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {c.category}
+                    <td className="hide-xl">
+                      <span className="truncate" style={{ maxWidth: '150px' }} title={c.category}>{c.category}</span>
                     </td>
                     <td>
-                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: c.priority === 'Urgent' || c.priority === 'High' ? 'var(--color-crimson-700)' : 'var(--color-slate-700)' }}>
+                      <span className={`chip ${c.priority === 'Urgent' ? 'chip-crimson' : c.priority === 'High' ? 'chip-amber' : 'chip-slate'}`}>
                         {c.priority}
                       </span>
                     </td>
                     <td>
                       <StatusBadge status={c.status} />
                     </td>
-                    <td style={{ fontSize: '0.8125rem' }}>
-                      {c.assignedAdminName || <span style={{ color: 'var(--color-slate-400)', fontStyle: 'italic' }}>Unassigned</span>}
+                    <td className="hide-lg">
+                      {c.assignedAdminName
+                        ? <span className="truncate" style={{ maxWidth: '150px' }} title={c.assignedAdminName}>{c.assignedAdminName}</span>
+                        : <span className="chip chip-slate">Unassigned</span>}
                     </td>
-                    <td style={{ fontSize: '0.8125rem' }}>{formatDate(c.createdAt)}</td>
+                    <td className="hide-md">
+                      {c.compliance ? (
+                        <span
+                          className={`chip ${c.compliance.state === 'overdue' ? 'chip-crimson' : c.compliance.state === 'due-soon' ? 'chip-amber' : c.compliance.state === 'closed' ? 'chip-slate' : 'chip-emerald'}`}
+                          title={c.compliance.nextDue ? `Next: ${c.compliance.nextDue.label} — ${formatDate(c.compliance.nextDue.dueAt)}` : 'All statutory deadlines met'}
+                        >
+                          {c.compliance.state === 'overdue'
+                            ? `${c.compliance.overdueCount} missed`
+                            : c.compliance.state === 'due-soon'
+                              ? 'Due soon'
+                              : c.compliance.state === 'closed'
+                                ? 'Closed'
+                                : 'On track'}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td className="hide-md nowrap cell-muted">{formatDate(c.createdAt)}</td>
                     <td>
-                      <Link to={`/admin/complaints/${c.id}`} className="btn btn-primary btn-sm">
-                        Open Workspace
+                      <Link to={`/admin/complaints/${c.id}`} className="btn btn-primary btn-sm" title="Open case workspace">
+                        Open <ArrowRight size={13} />
                       </Link>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', borderTop: '1px solid var(--color-slate-100)' }}>
-            <span style={{ fontSize: '0.8125rem', color: 'var(--color-slate-600)' }}>
-              Page {filters.page} of {totalPages}
+          <div className="pagination">
+            <span className="pagination-info">
+              Page {filters.page} of {totalPages} • {total} record{total === 1 ? '' : 's'}
             </span>
-            <div style={{ display: 'flex', gap: '0.35rem' }}>
+            <div className="pagination-controls">
               <button className="btn btn-secondary btn-sm" onClick={() => goToPage(filters.page - 1)} disabled={filters.page === 1}>
                 Previous
               </button>

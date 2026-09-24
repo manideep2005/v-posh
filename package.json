@@ -13,10 +13,11 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "build": "npm run build -w client",
     "build:client": "npm run build -w client",
-    "seed": "node server/seed.js"
+    "seed": "node server/seed.js",
+    "welcome": "node server/send-welcome.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

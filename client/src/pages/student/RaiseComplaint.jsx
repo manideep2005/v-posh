@@ -6,7 +6,7 @@ import { ShieldCheck, Lock, Upload, CheckCircle2, AlertCircle, ArrowLeft, ArrowR
 
 const PRIORITY_OPTIONS = [
   { value: 'Low', label: 'Low', desc: 'Minor concern, no immediate impact', color: '#6B7280', bg: '#F3F4F6' },
-  { value: 'Medium', label: 'Medium', desc: 'Moderate concern affecting wellbeing', color: '#D97706', bg: '#FEF3C7' },
+  { value: 'Medium', label: 'Medium', desc: 'Moderate concern affecting wellbeing', color: '#D97706', bg: 'var(--tint-amber)' },
   { value: 'High', label: 'High', desc: 'Serious incident requiring urgent attention', color: '#DC2626', bg: '#FEE2E2' },
   { value: 'Urgent', label: 'Urgent', desc: 'Immediate safety threat or severe harm', color: '#7C2D12', bg: '#FED7AA' },
 ];
@@ -96,7 +96,7 @@ export default function RaiseComplaint() {
   const stepProgress = ((step - 1) / 2) * 100;
 
   return (
-    <div className="container" style={{ padding: '2.5rem 1.5rem', maxWidth: '860px' }}>
+    <div className="container page" style={{ maxWidth: '860px' }}>
       {/* Header */}
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--color-navy-900)' }}>
@@ -109,7 +109,7 @@ export default function RaiseComplaint() {
 
       {/* Step Progress Bar */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.8125rem', fontWeight: '600' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.8125rem', fontWeight: '600', gap: '0.35rem' }}>
           {['Incident Details', 'Review & Confirm', 'Receipt Issued'].map((label, i) => (
             <span key={i} style={{ color: step === i + 1 ? 'var(--color-emerald-700)' : step > i + 1 ? 'var(--color-emerald-500)' : 'var(--color-slate-400)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               {step > i + 1 ? <CheckCircle2 size={14} /> : <span style={{ width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: '700', background: step === i + 1 ? 'var(--color-emerald-600)' : 'var(--color-slate-200)', color: step === i + 1 ? '#fff' : 'var(--color-slate-500)' }}>{i + 1}</span>}
@@ -123,7 +123,7 @@ export default function RaiseComplaint() {
       </div>
 
       {/* Confidentiality Notice */}
-      <div style={{ background: 'linear-gradient(135deg, #F0FDF4, #ECFDF5)', border: '1px solid #BBF7D0', borderRadius: 'var(--radius-sm)', padding: '1rem 1.25rem', marginBottom: '1.5rem', fontSize: '0.8125rem', color: '#166534' }}>
+      <div style={{ background: 'var(--tint-emerald)', border: '1px solid var(--border-emerald)', borderRadius: 'var(--radius-sm)', padding: '1rem 1.25rem', marginBottom: '1.5rem', fontSize: '0.8125rem', color: 'var(--text-emerald-strong)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '700', marginBottom: '0.35rem' }}>
           <ShieldCheck size={16} /> Statutory Confidentiality Commitment
         </div>
@@ -149,7 +149,7 @@ export default function RaiseComplaint() {
               <input id="title" name="title" type="text" className="form-control" placeholder="Brief summary of the incident" value={formData.title} onChange={handleChange} required style={{ fontSize: '0.9375rem' }} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="grid-2" style={{ gap: '1rem' }}>
               <div className="form-group">
                 <label style={{ fontWeight: '600' }}>Category <span style={{ color: '#DC2626' }}>*</span></label>
                 <select name="category" className="form-control" value={formData.category} onChange={handleChange} required>
@@ -166,7 +166,7 @@ export default function RaiseComplaint() {
 
             <div className="form-group">
               <label style={{ fontWeight: '600' }}>Priority Level <span style={{ color: '#DC2626' }}>*</span></label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '0.5rem' }}>
                 {PRIORITY_OPTIONS.map(opt => (
                   <button key={opt.value} type="button" onClick={() => setFormData(prev => ({ ...prev, priority: opt.value }))} style={{
                     padding: '0.65rem 0.5rem', borderRadius: 'var(--radius-sm)', border: `2px solid ${formData.priority === opt.value ? opt.color : 'var(--color-slate-200)'}`,
@@ -187,7 +187,7 @@ export default function RaiseComplaint() {
               <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--color-navy-900)' }}>Location & Person Involved</h3>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="grid-2" style={{ gap: '1rem' }}>
               <div className="form-group">
                 <label style={{ fontWeight: '600' }}>Location of Incident</label>
                 <input name="incidentLocation" type="text" className="form-control" placeholder="e.g. Computer Lab 3, Academic Block" value={formData.incidentLocation} onChange={handleChange} />
@@ -197,7 +197,7 @@ export default function RaiseComplaint() {
                 <input name="respondentName" type="text" className="form-control" placeholder="Name or designation of respondent" value={formData.respondentName} onChange={handleChange} />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="grid-2" style={{ gap: '1rem' }}>
               <div className="form-group">
                 <label style={{ fontWeight: '600' }}>Respondent Department</label>
                 <input name="respondentDept" type="text" className="form-control" placeholder="e.g. Computer Science & Engineering" value={formData.respondentDept} onChange={handleChange} />
@@ -226,7 +226,7 @@ export default function RaiseComplaint() {
               <textarea name="impactDescription" rows={3} className="form-control" placeholder="How has this incident affected you? (academic, emotional, physical impact)" value={formData.impactDescription} onChange={handleChange} style={{ lineHeight: '1.6' }} />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', marginTop: '0.5rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: '600', color: 'var(--color-slate-700)' }}>
                 <input type="checkbox" name="isRecurring" checked={formData.isRecurring} onChange={handleChange} style={{ width: 16, height: 16, accentColor: 'var(--color-emerald-600)' }} />
                 This is a recurring incident
@@ -263,7 +263,7 @@ export default function RaiseComplaint() {
             {uploadedFilesList.length > 0 && (
               <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 {uploadedFilesList.map(f => (
-                  <div key={f.id} style={{ fontSize: '0.8125rem', color: 'var(--color-emerald-700)', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.65rem', background: '#F0FDF4', borderRadius: 'var(--radius-sm)' }}>
+                  <div key={f.id} style={{ fontSize: '0.8125rem', color: 'var(--color-emerald-700)', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.65rem', background: 'var(--tint-emerald)', borderRadius: 'var(--radius-sm)' }}>
                     <CheckCircle2 size={14} /> {f.originalname} ({(f.size / 1024).toFixed(1)} KB)
                   </div>
                 ))}
@@ -286,7 +286,7 @@ export default function RaiseComplaint() {
             Verify Details Before Submission
           </h2>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+          <div className="grid-2" style={{ gap: '1rem', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
             {[
               { label: 'Title', value: formData.title },
               { label: 'Category', value: formData.category },
@@ -341,7 +341,7 @@ export default function RaiseComplaint() {
       {/* STEP 3: SUCCESS */}
       {step === 3 && submittedComplaint && (
         <div className="panel" style={{ textAlign: 'center', padding: '3rem 2rem', borderTop: '4px solid var(--color-emerald-700)' }}>
-          <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg, #D1FAE5, #A7F3D0)', color: 'var(--color-emerald-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem auto', boxShadow: '0 4px 14px rgba(16, 185, 129, 0.2)' }}>
+          <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'var(--tint-emerald)', color: 'var(--color-emerald-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem auto', boxShadow: '0 4px 14px rgba(16, 185, 129, 0.2)' }}>
             <CheckCircle2 size={40} />
           </div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--color-navy-900)', marginBottom: '0.5rem' }}>Grievance Formally Registered</h2>

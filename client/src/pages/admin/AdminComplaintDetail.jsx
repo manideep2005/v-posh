@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiFetch, formatDate } from '../../utils/api';
 import StatusBadge from '../../components/StatusBadge';
+import PdfDownloadButton from '../../components/PdfDownloadButton';
+import StatutoryTracker from '../../components/StatutoryTracker';
 import Timeline from '../../components/Timeline';
 import AttachmentList from '../../components/AttachmentList';
 import { ShieldCheck, FileText, MessageSquare, CheckCircle2, ArrowLeft, Send } from 'lucide-react';
@@ -125,7 +127,7 @@ export default function AdminComplaintDetail() {
     );
   }
 
-  const { complaint, history = [], updates = [], attachments = [] } = data;
+  const { complaint, history = [], updates = [], attachments = [], statutory } = data;
   const publicUpdates = updates.filter(u => u.isPublic);
   const internalNotes = updates.filter(u => !u.isPublic);
 
@@ -159,11 +161,28 @@ export default function AdminComplaintDetail() {
             <div>Complainant: <strong>{complaint.studentName} ({complaint.studentRollNo})</strong></div>
             <div>Dept: <strong>{complaint.studentDept}</strong></div>
             <div>Registered On: <strong>{formatDate(complaint.createdAt)}</strong></div>
+            <div style={{ marginTop: '0.6rem', display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <PdfDownloadButton
+                url={`/api/pdf/admin/complaints/${complaint.id}/acknowledgement`}
+                fallbackName={`VPOSH_${complaint.referenceId}_Complaint_Acknowledgement.pdf`}
+                label="Acknowledgement PDF"
+                iconSize={12}
+              />
+              <PdfDownloadButton
+                url={`/api/pdf/admin/complaints/${complaint.id}/status-report`}
+                fallbackName={`VPOSH_${complaint.referenceId}_Case_Status_Report.pdf`}
+                label="Status Report PDF"
+                iconSize={12}
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '1.5rem' }}>
+      {/* Statutory clock — the ICC's compliance view of this case */}
+      <StatutoryTracker statutory={statutory} />
+
+      <div className="split-sidebar">
         {/* Left Column: Complaint Data & Communications */}
         <div>
           {/* SECTION 1: COMPLAINT OVERVIEW */}
@@ -174,7 +193,7 @@ export default function AdminComplaintDetail() {
               </h3>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
+            <div className="grid-2" style={{ gap: '1rem', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
               <div>
                 <strong style={{ color: 'var(--color-slate-500)', display: 'block', fontSize: '0.75rem', textTransform: 'uppercase' }}>Incident Date</strong>
                 <span>{complaint.incidentDate}</span>
@@ -299,12 +318,12 @@ export default function AdminComplaintDetail() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {internalNotes.map(u => (
-                    <div key={u.id} style={{ background: '#FEF2F2', border: '1px solid #FECACA', padding: '0.85rem', borderRadius: 'var(--radius-sm)' }}>
-                      <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#991B1B', display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                    <div key={u.id} style={{ background: 'var(--color-crimson-50)', border: '1px solid var(--border-crimson)', padding: '0.85rem', borderRadius: 'var(--radius-sm)' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-crimson-strong)', display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
                         <span>CONFIDENTIAL • {u.authorName} ({u.authorRole})</span>
                         <span>{formatDate(u.createdAt)}</span>
                       </div>
-                      <p style={{ fontSize: '0.8125rem', color: '#7F1D1D' }}>{u.updateText}</p>
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--text-crimson-body)' }}>{u.updateText}</p>
                     </div>
                   ))}
                 </div>

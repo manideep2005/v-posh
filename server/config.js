@@ -34,7 +34,38 @@ module.exports = {
   KRATOSID_BASE_URL: process.env.KRATOSID_BASE_URL || 'https://api.kratosid.com',
   KRATOSID_APP_NAME: process.env.KRATOSID_APP_NAME || 'KratosID',
 
-  SMTP_USER: process.env.SMTP_USER || '',
+  // Shared secret for scheduled maintenance jobs (escalation sweep, ledger
+  // checks). On Vercel set the same value as CRON_SECRET so Cron can call it.
+  MAINTENANCE_TOKEN: process.env.MAINTENANCE_TOKEN || process.env.CRON_SECRET || '',
+
+  // True on serverless hosts, where the process is frozen the moment a response
+  // is sent — background work must therefore be finished before responding.
+  IS_SERVERLESS: Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY),
+
+  // ── Email (SMTP) ─────────────────────────────────────────────────────────
+  // Sending mailbox. `vposh@vitap.ac.in` is a Google Workspace address, so the
+  // password must be a per-account App Password (never the account password).
+  SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
+  SMTP_PORT: parseInt(process.env.SMTP_PORT || '465', 10),
+  SMTP_SECURE: process.env.SMTP_SECURE !== 'false', // 465 = implicit TLS
+  SMTP_USER: process.env.SMTP_USER || 'vposh@vitap.ac.in',
   SMTP_PASS: process.env.SMTP_PASS || '',
   SMTP_FROM: process.env.SMTP_FROM || '',
+  SMTP_FROM_NAME: process.env.SMTP_FROM_NAME || 'V-POSH ICC · VIT-AP',
+  SMTP_REPLY_TO: process.env.SMTP_REPLY_TO || '',
+  // Mailbox the ICC reads — receives new-complaint and escalation copies.
+  ICC_NOTIFICATION_EMAIL: process.env.ICC_NOTIFICATION_EMAIL || 'vposh@vitap.ac.in',
+
+  // Master switches
+  EMAIL_ENABLED: process.env.EMAIL_ENABLED !== 'false',
+  EMAIL_DRY_RUN: process.env.EMAIL_DRY_RUN === 'true',
+  EMAIL_LOG_ENABLED: process.env.EMAIL_LOG_ENABLED !== 'false',
+  // Comma-separated service keys to silence, e.g. "sla_warning,feedback_request"
+  EMAIL_SERVICES_DISABLED: (process.env.EMAIL_SERVICES_DISABLED || '')
+    .split(',').map(s => s.trim()).filter(Boolean),
+  // Base URL used to build deep links inside emails
+  EMAIL_LINK_BASE_URL: process.env.EMAIL_LINK_BASE_URL || process.env.APP_BASE_URL || 'https://v-posh.vercel.app',
+  // Minimum gap between two SMTP sends — Gmail throttles burst senders.
+  EMAIL_MIN_SEND_GAP_MS: parseInt(process.env.EMAIL_MIN_SEND_GAP_MS || '300', 10),
+  EMAIL_SEND_ATTEMPTS: parseInt(process.env.EMAIL_SEND_ATTEMPTS || '2', 10),
 };

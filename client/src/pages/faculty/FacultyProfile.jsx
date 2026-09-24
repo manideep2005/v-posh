@@ -62,13 +62,16 @@ export default function FacultyProfile() {
     }
   };
 
-  if (loading) return <div className="container" style={{ padding: '3rem 0', textAlign: 'center' }}>Loading profile...</div>;
+  if (loading) return <div className="container page"><div className="loading-state">Loading profile…</div></div>;
 
   return (
-    <div className="container" style={{ padding: '2.5rem 1.5rem', maxWidth: '680px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--color-navy-900)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem' }}>
-        <User size={22} /> Faculty Profile & Settings
-      </h1>
+    <div className="container page" style={{ maxWidth: '760px', margin: '0 auto' }}>
+      <div className="page-head">
+        <div className="page-head-main">
+          <h1><User size={22} /> Faculty Profile &amp; Settings</h1>
+          <p className="page-sub">Your contact details, designation and account password.</p>
+        </div>
+      </div>
 
       {/* Profile Info */}
       <div className="panel" style={{ marginBottom: '1.5rem' }}>
@@ -76,7 +79,7 @@ export default function FacultyProfile() {
         {msg && <div className="alert alert-success" style={{ marginBottom: '1rem' }}><CheckCircle2 size={16} /> {msg}</div>}
         {err && <div className="alert alert-danger" style={{ marginBottom: '1rem' }}><AlertCircle size={16} /> {err}</div>}
         <form onSubmit={handleProfileUpdate}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="grid-2" style={{ gap: '1rem' }}>
             <div className="form-group">
               <label>Full Name</label>
               <input type="text" className="form-control" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
@@ -114,7 +117,7 @@ export default function FacultyProfile() {
             <label>Current Password</label>
             <input type="password" className="form-control" value={pwdForm.currentPassword} onChange={e => setPwdForm({ ...pwdForm, currentPassword: e.target.value })} required />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="grid-2" style={{ gap: '1rem' }}>
             <div className="form-group">
               <label>New Password</label>
               <input type="password" className="form-control" value={pwdForm.newPassword} onChange={e => setPwdForm({ ...pwdForm, newPassword: e.target.value })} required minLength={8} />

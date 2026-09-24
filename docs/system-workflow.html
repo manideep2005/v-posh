@@ -373,11 +373,13 @@ res.status(<span class="hl">429</span>).json({
   <ul>
     <li><span class="method m-post">POST</span><code>/forgot-password</code> — always returns the same generic
     message (account existence never disclosed). Internally generates a 32-byte random token, stores only its
-    SHA-256 hash with a <strong>30-minute expiry</strong>, and (in this build) returns the reset link as
-    <code>devLink</code> since SMTP is not wired.</li>
+    SHA-256 hash with a <strong>30-minute expiry</strong>, and emails the single-use link through the
+    <code>password_reset</code> service. When no SMTP credentials are configured the link is returned as
+    <code>devLink</code> instead, which the portal only renders in that local-development case.</li>
     <li><span class="method m-post">POST</span><code>/reset-password</code> — validates the token hash + expiry,
     sets the new bcrypt password, and immediately nulls the token so it is <strong>single-use</strong>.</li>
-    <li>Password change (<code>/change-password</code>) requires a valid JWT <em>and</em> the current password.</li>
+    <li>Password change (<code>/change-password</code>) requires a valid JWT <em>and</em> the current password, and
+    triggers the <code>security_alert</code> email so any credential change is reported to the account holder.</li>
   </ul>
 
   <!-- ══════════════════ 6. COMPLAINT LIFECYCLE ══════════════════ -->

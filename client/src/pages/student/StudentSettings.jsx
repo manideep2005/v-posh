@@ -68,7 +68,7 @@ export default function StudentSettings() {
     }
   };
 
-  if (loading) return <div className="container" style={{ padding: '3rem 0', textAlign: 'center' }}>Loading settings...</div>;
+  if (loading) return <div className="container page"><div className="loading-block"><span className="spinner" /> Loading settings…</div></div>;
 
   const TABS = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -77,13 +77,13 @@ export default function StudentSettings() {
   ];
 
   return (
-    <div className="container" style={{ padding: '2.5rem 1.5rem', maxWidth: '720px', margin: '0 auto' }}>
+    <div className="container page" style={{ maxWidth: '720px', margin: '0 auto' }}>
       <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--color-navy-900)', marginBottom: '1.5rem' }}>
         ⚙️ Settings
       </h1>
 
       {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid var(--color-slate-200)', paddingBottom: '0.5rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid var(--color-slate-200)', paddingBottom: '0.5rem' }}>
         {TABS.map(tab => {
           const Icon = tab.icon;
           return (
@@ -132,7 +132,7 @@ export default function StudentSettings() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="grid-2" style={{ gap: '1rem' }}>
               <div className="form-group">
                 <label>Full Name</label>
                 <input type="text" className="form-control" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
@@ -142,7 +142,7 @@ export default function StudentSettings() {
                 <input type="tel" className="form-control" placeholder="+91 XXXXX XXXXX" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="grid-2" style={{ gap: '1rem' }}>
               <div className="form-group">
                 <label>Department</label>
                 <select className="form-control" value={form.department} onChange={e => setForm({ ...form, department: e.target.value })}>
@@ -176,7 +176,7 @@ export default function StudentSettings() {
             </div>
 
             {/* Read-only fields */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+            <div className="grid-2" style={{ gap: '1rem', marginTop: '0.5rem' }}>
               <div className="form-group">
                 <label>Student ID / Roll No</label>
                 <input type="text" className="form-control" value={user?.studentId || ''} disabled style={{ background: 'var(--color-slate-100)' }} />
@@ -207,7 +207,7 @@ export default function StudentSettings() {
               <label>Current Password</label>
               <input type="password" className="form-control" placeholder="Enter current password" value={pwdForm.currentPassword} onChange={e => setPwdForm({ ...pwdForm, currentPassword: e.target.value })} required />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="grid-2" style={{ gap: '1rem' }}>
               <div className="form-group">
                 <label>New Password</label>
                 <input type="password" className="form-control" placeholder="Min. 8 characters" value={pwdForm.newPassword} onChange={e => setPwdForm({ ...pwdForm, newPassword: e.target.value })} required minLength={8} />
@@ -250,7 +250,7 @@ export default function StudentSettings() {
                   }} />
                   <span style={{
                     position: 'absolute', height: '18px', width: '18px', borderRadius: '50%',
-                    left: pref.enabled ? '23px' : '3px', bottom: '3px', background: '#fff', transition: '0.3s',
+                    left: pref.enabled ? '23px' : '3px', bottom: '3px', background: '#ffffff', transition: '0.3s',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                   }} />
                 </label>

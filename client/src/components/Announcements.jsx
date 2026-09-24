@@ -3,10 +3,10 @@ import { apiFetch, formatDate } from '../utils/api';
 import { Megaphone, X, AlertTriangle, Info, Star } from 'lucide-react';
 
 const PRIORITY_CONFIG = {
-  urgent: { icon: AlertTriangle, color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
-  high: { icon: AlertTriangle, color: '#EA580C', bg: '#FFF7ED', border: '#FED7AA' },
-  normal: { icon: Info, color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-  low: { icon: Star, color: '#6B7280', bg: '#F9FAFB', border: '#E5E7EB' },
+  urgent: { icon: AlertTriangle, color: '#DC2626', bg: 'var(--color-crimson-50)', border: 'var(--border-crimson)' },
+  high: { icon: AlertTriangle, color: '#EA580C', bg: 'var(--color-amber-50)', border: 'var(--border-amber)' },
+  normal: { icon: Info, color: '#2563EB', bg: 'var(--color-blue-50)', border: 'var(--border-blue)' },
+  low: { icon: Star, color: '#6B7280', bg: 'var(--color-slate-50)', border: 'var(--border-emerald)' },
 };
 
 export default function Announcements() {

@@ -34,13 +34,16 @@ export default function FacultyRaiseComplaint() {
   };
 
   return (
-    <div className="container" style={{ padding: '2.5rem 1.5rem', maxWidth: '720px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--color-navy-900)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-        <FileText size={22} /> File Complaint on Behalf of Student
-      </h1>
-      <p style={{ color: 'var(--color-slate-600)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
-        As a faculty member, you can raise complaints on behalf of students in your department.
-      </p>
+    <div className="container page" style={{ maxWidth: '820px', margin: '0 auto' }}>
+      <div className="page-head">
+        <div className="page-head-main">
+          <h1><FileText size={22} /> File Complaint on Behalf of a Student</h1>
+          <p className="page-sub">
+            As department faculty you may register a grievance for a student who is unable to file
+            it themselves. The case follows the same statutory timeline as any other complaint.
+          </p>
+        </div>
+      </div>
 
       {msg && <div className="alert alert-success" style={{ marginBottom: '1rem' }}><CheckCircle2 size={16} /> {msg}</div>}
       {err && <div className="alert alert-danger" style={{ marginBottom: '1rem' }}><AlertCircle size={16} /> {err}</div>}
@@ -48,7 +51,7 @@ export default function FacultyRaiseComplaint() {
       <form onSubmit={handleSubmit}>
         <div className="panel" style={{ marginBottom: '1.5rem' }}>
           <div className="panel-header"><h3 className="panel-title" style={{ fontSize: '1rem' }}>Student Information</h3></div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: '1rem' }}>
             <div className="form-group">
               <label>Student Name <span className="required">*</span></label>
               <input type="text" name="studentName" className="form-control" placeholder="Full name" value={form.studentName} onChange={handleChange} required />
@@ -88,7 +91,7 @@ export default function FacultyRaiseComplaint() {
             <label>Description <span className="required">*</span></label>
             <textarea name="description" className="form-control" rows={5} placeholder="Detailed description of the incident..." value={form.description} onChange={handleChange} required />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="grid-2" style={{ gap: '1rem' }}>
             <div className="form-group">
               <label>Incident Date <span className="required">*</span></label>
               <input type="date" name="incidentDate" className="form-control" value={form.incidentDate} onChange={handleChange} required />
@@ -98,7 +101,7 @@ export default function FacultyRaiseComplaint() {
               <input type="text" name="incidentLocation" className="form-control" placeholder="e.g. Block A, Room 301" value={form.incidentLocation} onChange={handleChange} />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="grid-2" style={{ gap: '1rem' }}>
             <div className="form-group">
               <label>Respondent Name</label>
               <input type="text" name="respondentName" className="form-control" placeholder="Name of person involved" value={form.respondentName} onChange={handleChange} />

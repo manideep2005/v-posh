@@ -8,14 +8,14 @@ export default function Footer() {
       <div className="container">
         <div className="footer-grid">
           <div className="footer-col">
-            <div style={{ background: '#FFFFFF', padding: '6px 12px', borderRadius: '4px', display: 'inline-block', marginBottom: '1rem' }}>
+            <div style={{ background: 'var(--color-slate-100)', padding: '6px 12px', borderRadius: '4px', display: 'inline-block', marginBottom: '1rem' }}>
               <img 
                 src="/vit-ap-logo.png" 
                 alt="VIT-AP University Logo" 
                 style={{ height: '36px', width: 'auto', objectFit: 'contain' }}
               />
             </div>
-            <h3 style={{ fontSize: '1.1rem', color: '#FFFFFF', marginBottom: '0.5rem' }}>
+            <h3 style={{ fontSize: '1.1rem', color: 'var(--color-slate-600)', marginBottom: '0.5rem' }}>
               V-POSH • VIT-AP University
             </h3>
             <p style={{ marginBottom: '1rem' }}>

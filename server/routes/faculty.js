@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const config = require('../config');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logAuditAction } = require('../middleware/audit');
-const { sendEmail, TEMPLATES } = require('../services/email');
+const { sendService } = require('../services/email');
+const { statutoryMilestones, complianceSummary } = require('../services/statutory');
 
 // Middleware: Faculty access only
 router.use(authenticateToken, requireRole(['faculty']));
@@ -44,6 +46,17 @@ router.get('/dashboard', async (req, res) => {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, 5);
 
+    // Department statutory health — which cases are about to breach a deadline
+    const deptIds = new Set(deptComplaints.map(c => c.id));
+    const historyRows = await db.statusHistory.find();
+    const historyByComplaint = {};
+    historyRows.forEach(h => {
+      if (!deptIds.has(h.complaintId)) return;
+      historyByComplaint[h.complaintId] = historyByComplaint[h.complaintId] || [];
+      historyByComplaint[h.complaintId].push(h);
+    });
+    const compliance = complianceSummary(deptComplaints, historyByComplaint);
+
     res.json({
       success: true,
       stats: {
@@ -53,7 +66,10 @@ router.get('/dashboard', async (req, res) => {
         assignedTotal: totalAssigned,
         assignedActive: activeAssigned,
         deptStudents: students.length,
+        statutoryOverdue: compliance.overdue,
+        statutoryDueSoon: compliance.dueSoon,
       },
+      compliance,
       recentComplaints,
       notifications,
     });
@@ -114,7 +130,10 @@ router.get('/complaints/:id', async (req, res) => {
 
     const attachments = await db.attachments.find({ complaintId: complaint.id });
 
-    res.json({ success: true, complaint, history, updates, attachments });
+    // Department faculty see the same statutory clock the ICC works from.
+    const statutory = statutoryMilestones(complaint, history);
+
+    res.json({ success: true, complaint, history, updates, attachments, statutory });
   } catch (err) {
     console.error('Faculty complaint detail error:', err);
     res.status(500).json({ success: false, message: 'Failed to load complaint details.' });
@@ -201,6 +220,45 @@ router.post('/complaints', async (req, res) => {
       changedByRole: 'faculty',
       comment: 'Complaint filed by faculty member on behalf of student.',
     });
+
+    const alertData = {
+      referenceId,
+      title: String(title).trim(),
+      category,
+      priority: 'Medium',
+      raisedByName: req.user.name,
+      raisedByRole: 'faculty',
+      department: req.user.department || 'N/A',
+      submittedAt: newComplaint.createdAt,
+    };
+
+    // The student named in the complaint is told, even when filed by a faculty member.
+    if (studentUser && studentUser.email) {
+      sendService('faculty_filed_on_behalf', {
+        to: studentUser.email,
+        data: {
+          referenceId,
+          studentName: studentUser.name,
+          facultyName: req.user.name,
+          department: req.user.department || 'your department',
+          title: String(title).trim(),
+          category,
+          filedAt: newComplaint.createdAt,
+        },
+        meta: { complaintId: newComplaint.id },
+      }).catch(err => console.error('[Email] Filed-on-behalf email failed:', err.message));
+    }
+
+    // Alert the ICC queue, in parallel with the in-app notifications above.
+    const iccRecipients = new Set(admins.map(a => a.email).filter(Boolean));
+    if (config.ICC_NOTIFICATION_EMAIL) iccRecipients.add(config.ICC_NOTIFICATION_EMAIL);
+    for (const recipient of iccRecipients) {
+      sendService('new_complaint_alert', {
+        to: recipient,
+        data: { ...alertData, officerName: 'ICC Committee' },
+        meta: { complaintId: newComplaint.id },
+      }).catch(err => console.error('[Email] New complaint alert failed:', err.message));
+    }
 
     logAuditAction(req, 'COMPLAINT_SUBMITTED_FACULTY', 'COMPLAINT', newComplaint.id, `Faculty ${req.user.name} raised complaint ${referenceId}`);
 

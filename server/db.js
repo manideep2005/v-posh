@@ -39,7 +39,9 @@ const MONGO_COLLECTIONS = {
   departments: 'departments',
   categories: 'complaint_categories',
   announcements: 'announcements',
-  pendingPushes: 'pending_pushes'
+  caseFeedback: 'case_feedback',
+  pendingPushes: 'pending_pushes',
+  emailLog: 'email_log'
 };
 
 const JSON_COLLECTION_KEYS = {
@@ -323,6 +325,10 @@ const mongoEngine = {
       await this.col('attachments').createIndex({ complaintId: 1 });
       await this.col('notifications').createIndex({ userId: 1 });
       await this.col('audit_logs').createIndex({ createdAt: -1 });
+    await this.col('audit_logs').createIndex({ entryHash: 1 });
+    await this.col('case_feedback').createIndex({ complaintId: 1 }, { unique: true });
+    await this.col('email_log').createIndex({ createdAt: -1 });
+    await this.col('email_log').createIndex({ service: 1 });
 
       // Bootstrap reference/config data
       await bootstrapCollections(this);
@@ -410,6 +416,9 @@ const dbExports = {
           return await jsonEngine.init();
         }
       }
+      console.warn('⚠️  MONGODB_URI is not set — using JSON file fallback. ' +
+        'DATA WILL BE LOST between serverless invocations on Vercel/Render. ' +
+        'Configure MONGODB_URI for production.');
       return await jsonEngine.init();
     })();
     this.driver = await G.__poshDbReady;

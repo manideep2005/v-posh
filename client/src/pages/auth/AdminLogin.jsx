@@ -282,7 +282,7 @@ export default function AdminLogin() {
                 </>
               ) : (
                 <>
-                  <div style={{ background: '#fff', borderRadius: '12px', padding: '1.25rem', display: 'inline-block', marginBottom: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+                  <div style={{ background: 'var(--color-slate-50)', borderRadius: '12px', padding: '1.25rem', display: 'inline-block', marginBottom: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
                     <QRCodeSVG value={qrData.qrPayload} size={180} level="M" />
                   </div>
                   <div style={{ fontSize: '0.8125rem', color: '#93C5FD', marginBottom: '0.5rem' }}>

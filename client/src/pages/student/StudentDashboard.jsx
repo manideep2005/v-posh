@@ -2,19 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, formatDate } from '../../utils/api';
 import StatusBadge from '../../components/StatusBadge';
-import { FilePlus, FileText, Clock, CheckCircle2, Shield, AlertTriangle, ArrowRight, Bell, TrendingUp, Sparkles, Settings } from 'lucide-react';
+import { FilePlus, FileText, Clock, CheckCircle2, Shield, AlertTriangle, ArrowRight, Bell, TrendingUp, Settings } from 'lucide-react';
 import Announcements from '../../components/Announcements';
+import { useAuth } from '../../context/AuthContext';
 
 // ─── Greeting helper ────────────────────────────────────────────────────────
 function getGreeting() {
   const h = new Date().getHours();
-  if (h < 12) return { text: 'Good Morning', emoji: '☀️', color: '#F59E0B' };
-  if (h < 17) return { text: 'Good Afternoon', emoji: '🌤️', color: '#3B82F6' };
-  return { text: 'Good Evening', emoji: '🌙', color: '#8B5CF6' };
+  if (h < 12) return { text: 'Good Morning', emoji: '☀️' };
+  if (h < 17) return { text: 'Good Afternoon', emoji: '🌤️' };
+  return { text: 'Good Evening', emoji: '🌙' };
 }
 
 // ─── Animated progress ring ─────────────────────────────────────────────────
-function ProgressRing({ value, total, size = 80, strokeWidth = 6, color = 'var(--color-emerald-600)' }) {
+function ProgressRing({ value, total, size = 80, strokeWidth = 6 }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -24,7 +25,7 @@ function ProgressRing({ value, total, size = 80, strokeWidth = 6, color = 'var(-
     <div style={{ position: 'relative', width: size, height: size }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
         <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="var(--color-slate-200)" strokeWidth={strokeWidth} />
-        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth}
+        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="var(--color-navy-700)" strokeWidth={strokeWidth}
           strokeDasharray={circumference} strokeDashoffset={offset}
           strokeLinecap="round" style={{ transition: 'stroke-dashoffset 1s ease-out' }} />
       </svg>
@@ -50,12 +51,12 @@ function StatusTimeline({ status }) {
           <React.Fragment key={step}>
             <div title={step} style={{
               width: isCurrent ? '10px' : '6px', height: isCurrent ? '10px' : '6px', borderRadius: '50%',
-              background: isActive ? 'var(--color-emerald-600)' : 'var(--color-slate-300)',
+              background: isActive ? 'var(--color-navy-700)' : 'var(--color-slate-300)',
               transition: 'all 0.3s', flexShrink: 0,
-              boxShadow: isCurrent ? '0 0 0 3px rgba(16, 185, 129, 0.2)' : 'none',
+              boxShadow: isCurrent ? '0 0 0 3px rgba(15, 23, 42, 0.15)' : 'none',
             }} />
             {i < steps.length - 1 && (
-              <div style={{ flex: 1, height: '2px', background: i < currentIdx ? 'var(--color-emerald-600)' : 'var(--color-slate-200)', transition: 'background 0.3s', minWidth: 8 }} />
+              <div style={{ flex: 1, height: '2px', background: i < currentIdx ? 'var(--color-navy-700)' : 'var(--color-slate-200)', transition: 'background 0.3s', minWidth: 8 }} />
             )}
           </React.Fragment>
         );
@@ -63,8 +64,6 @@ function StatusTimeline({ status }) {
     </div>
   );
 }
-
-import { useAuth } from '../../context/AuthContext';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
@@ -85,16 +84,16 @@ export default function StudentDashboard() {
   };
 
   if (loading) {
-    return <div className="container" style={{ padding: '3rem 0', textAlign: 'center' }}>Loading your dashboard...</div>;
+    return <div className="container page"><div className="loading-state">Loading your dashboard…</div></div>;
   }
 
-  const { stats, recentComplaints = [], recentUpdates = [], recentHistory = [] } = data || {};
+  const { stats, recentComplaints = [], recentUpdates = [] } = data || {};
   const greeting = getGreeting();
 
   return (
-    <div className="container" style={{ padding: '2.5rem 1.5rem' }}>
+    <div className="container page">
       {/* ─── Greeting ─── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+      <div className="page-head" style={{ marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--color-navy-900)' }}>
             {greeting.emoji} {greeting.text}, {user?.name || 'Student'}!
@@ -103,7 +102,7 @@ export default function StudentDashboard() {
             Here's what's happening with your complaints today
           </p>
         </div>
-        <Link to="/student/complaints/new" className="btn btn-emerald">
+        <Link to="/student/complaints/new" className="btn btn-primary">
           <FilePlus size={16} /> Raise Complaint
         </Link>
       </div>
@@ -113,79 +112,79 @@ export default function StudentDashboard() {
 
       {/* ─── Stats Grid ─── */}
       <div className="stats-grid" style={{ marginBottom: '2rem' }}>
-        <div className="stat-card" style={{ borderLeft: '4px solid #6366F1' }}>
+        <div className="stat-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div className="stat-label">Total Submitted</div>
-              <div className="stat-value" style={{ color: '#6366F1' }}>{stats?.total || 0}</div>
+              <div className="stat-value">{stats?.total || 0}</div>
               <div className="stat-sub">Lifetime registered</div>
             </div>
-            <div style={{ width: 44, height: 44, borderRadius: '12px', background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <FileText size={20} style={{ color: '#6366F1' }} />
+            <div style={{ width: 44, height: 44, borderRadius: '10px', background: 'var(--color-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <FileText size={20} style={{ color: 'var(--color-navy-700)' }} />
             </div>
           </div>
         </div>
 
-        <div className="stat-card" style={{ borderLeft: '4px solid #F59E0B' }}>
+        <div className="stat-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div className="stat-label">Active Cases</div>
-              <div className="stat-value" style={{ color: '#F59E0B' }}>{stats?.active || 0}</div>
+              <div className="stat-value">{stats?.active || 0}</div>
               <div className="stat-sub">Currently in progress</div>
             </div>
-            <div style={{ width: 44, height: 44, borderRadius: '12px', background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Clock size={20} style={{ color: '#F59E0B' }} />
+            <div style={{ width: 44, height: 44, borderRadius: '10px', background: 'var(--color-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Clock size={20} style={{ color: 'var(--color-navy-700)' }} />
             </div>
           </div>
         </div>
 
-        <div className="stat-card" style={{ borderLeft: '4px solid #8B5CF6' }}>
+        <div className="stat-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div className="stat-label">Under Review</div>
-              <div className="stat-value" style={{ color: '#8B5CF6' }}>{stats?.underReview || 0}</div>
+              <div className="stat-value">{stats?.underReview || 0}</div>
               <div className="stat-sub">ICC reviewing</div>
             </div>
-            <div style={{ width: 44, height: 44, borderRadius: '12px', background: '#EDE9FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Shield size={20} style={{ color: '#8B5CF6' }} />
+            <div style={{ width: 44, height: 44, borderRadius: '10px', background: 'var(--color-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Shield size={20} style={{ color: 'var(--color-navy-700)' }} />
             </div>
           </div>
         </div>
 
-        <div className="stat-card" style={{ borderLeft: '4px solid #10B981' }}>
+        <div className="stat-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div className="stat-label">Resolved</div>
-              <div className="stat-value" style={{ color: '#10B981' }}>{stats?.resolved || 0}</div>
+              <div className="stat-value">{stats?.resolved || 0}</div>
               <div className="stat-sub">Cases closed</div>
             </div>
-            <div style={{ width: 44, height: 44, borderRadius: '12px', background: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <CheckCircle2 size={20} style={{ color: '#10B981' }} />
+            <div style={{ width: 44, height: 44, borderRadius: '10px', background: 'var(--color-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CheckCircle2 size={20} style={{ color: 'var(--color-navy-700)' }} />
             </div>
           </div>
         </div>
       </div>
 
       {/* ─── Quick Actions ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+      <div className="card-grid" style={{ marginBottom: '2rem' }}>
         {[
-          { to: '/student/complaints/new', icon: FilePlus, color: '#10B981', bg: '#D1FAE5', label: 'Raise Complaint', sub: 'File a new case' },
-          { to: '/student/complaints', icon: FileText, color: '#3B82F6', bg: '#DBEAFE', label: 'Track Cases', sub: 'View all complaints' },
-          { to: '/student/profile', icon: TrendingUp, color: '#8B5CF6', bg: '#EDE9FE', label: 'My Profile', sub: 'Update details' },
-          { to: '/student/settings', icon: Settings, color: '#F59E0B', bg: '#FEF3C7', label: 'Settings', sub: 'Preferences' },
+          { to: '/student/complaints/new', icon: FilePlus, label: 'Raise Complaint', sub: 'File a new case' },
+          { to: '/student/complaints', icon: FileText, label: 'Track Cases', sub: 'View all complaints' },
+          { to: '/student/profile', icon: TrendingUp, label: 'My Profile', sub: 'Update details' },
+          { to: '/student/settings', icon: Settings, label: 'Settings', sub: 'Preferences' },
         ].map((item, i) => {
           const Icon = item.icon;
           return (
             <Link key={i} to={item.to} style={{
               textDecoration: 'none', padding: '1.25rem', border: '1px solid var(--color-slate-200)',
               borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', gap: '0.75rem',
-              transition: 'all 0.2s', background: '#fff',
+              transition: 'all 0.2s', background: 'var(--color-slate-50)',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = item.color; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 4px 12px ${item.color}20`; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-slate-200)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-slate-400)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-slate-200)'; }}
             >
-              <div style={{ width: 42, height: 42, borderRadius: '10px', background: item.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Icon size={20} style={{ color: item.color }} />
+              <div style={{ width: 42, height: 42, borderRadius: '10px', background: 'var(--color-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={20} style={{ color: 'var(--color-navy-700)' }} />
               </div>
               <div>
                 <div style={{ fontWeight: '700', fontSize: '0.875rem', color: 'var(--color-navy-900)' }}>{item.label}</div>
@@ -197,7 +196,7 @@ export default function StudentDashboard() {
       </div>
 
       {/* ─── Main Content Grid ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '1.5rem' }}>
+      <div className="split-sidebar">
         {/* Recent Complaints */}
         <div className="panel">
           <div className="panel-header">
@@ -212,7 +211,7 @@ export default function StudentDashboard() {
               </div>
               <p style={{ color: 'var(--color-slate-600)', fontWeight: '600', fontSize: '0.9375rem' }}>No complaints yet</p>
               <p style={{ color: 'var(--color-slate-500)', fontSize: '0.8125rem', marginBottom: '1rem' }}>Your submitted complaints will appear here</p>
-              <Link to="/student/complaints/new" className="btn btn-emerald btn-sm">
+              <Link to="/student/complaints/new" className="btn btn-primary btn-sm">
                 <FilePlus size={14} /> Submit Your First Complaint
               </Link>
             </div>
@@ -223,8 +222,8 @@ export default function StudentDashboard() {
                   display: 'block', padding: '1rem 1.25rem', border: '1px solid var(--color-slate-200)',
                   borderRadius: 'var(--radius-sm)', textDecoration: 'none', transition: 'all 0.15s',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-emerald-400)'; e.currentTarget.style.background = '#F8FDF9'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-slate-200)'; e.currentTarget.style.background = '#fff'; }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-slate-400)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-slate-200)'; }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.35rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -279,7 +278,7 @@ export default function StudentDashboard() {
                 {recentUpdates.map(u => (
                   <div key={u.id} style={{
                     padding: '0.85rem', background: 'var(--color-slate-50)', border: '1px solid var(--color-slate-200)',
-                    borderRadius: 'var(--radius-sm)', borderLeft: '3px solid #3B82F6',
+                    borderRadius: 'var(--radius-sm)',
                   }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--color-navy-900)', marginBottom: '0.2rem', display: 'flex', justifyContent: 'space-between' }}>
                       <span>{u.authorName}</span>
@@ -296,14 +295,14 @@ export default function StudentDashboard() {
 
           {/* Safety Notice */}
           <div style={{
-            padding: '1rem 1.25rem', background: 'linear-gradient(135deg, #FEF3C7, #FDE68A22)',
-            border: '1px solid #FDE68A', borderRadius: 'var(--radius-sm)',
+            padding: '1rem 1.25rem', background: 'var(--color-slate-50)', border: '1px solid var(--color-slate-200)',
+            borderRadius: 'var(--radius-sm)',
           }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-              <Shield size={18} style={{ color: '#D97706', flexShrink: 0, marginTop: '1px' }} />
+              <Shield size={18} style={{ color: 'var(--color-navy-700)', flexShrink: 0, marginTop: '1px' }} />
               <div>
-                <p style={{ fontSize: '0.8125rem', fontWeight: '700', color: '#92400E', margin: 0 }}>Your Privacy is Protected</p>
-                <p style={{ fontSize: '0.75rem', color: '#B45309', margin: '0.3rem 0 0', lineHeight: '1.4' }}>
+                <p style={{ fontSize: '0.8125rem', fontWeight: '700', color: 'var(--color-navy-900)', margin: 0 }}>Your Privacy is Protected</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-slate-600)', margin: '0.3rem 0 0', lineHeight: '1.4' }}>
                   All complaint details are strictly confidential and visible only to ICC members. Your identity is protected under POSH Act.
                 </p>
               </div>
