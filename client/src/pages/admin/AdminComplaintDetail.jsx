@@ -248,7 +248,7 @@ export default function AdminComplaintDetail() {
                   Add Entry to Case Record
                 </label>
                 <div style={{ display: 'flex', gap: '1.5rem', margin: '0.5rem 0 0.85rem 0', fontSize: '0.8125rem' }}>
-                  <label style={{ fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--color-blue-700)' }}>
+                  <label style={{ fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-blue-strong)' }}>
                     <input
                       type="radio"
                       name="updateType"
@@ -258,7 +258,7 @@ export default function AdminComplaintDetail() {
                     📢 Official Public Update (Visible to Student)
                   </label>
 
-                  <label style={{ fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--color-crimson-700)' }}>
+                  <label style={{ fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-crimson-strong)' }}>
                     <input
                       type="radio"
                       name="updateType"
@@ -296,12 +296,12 @@ export default function AdminComplaintDetail() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {publicUpdates.map(u => (
-                    <div key={u.id} style={{ background: 'var(--color-blue-50)', border: '1px solid #BFDBFE', padding: '0.85rem', borderRadius: 'var(--radius-sm)' }}>
-                      <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#1E40AF', display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                    <div key={u.id} className="official-update-bubble" style={{ background: 'var(--color-blue-50)', border: '1px solid var(--border-blue)', padding: '0.85rem', borderRadius: 'var(--radius-sm)' }}>
+                      <div className="official-update-meta" style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-blue-strong)', display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
                         <span>{u.authorName} ({u.authorRole})</span>
                         <span>{formatDate(u.createdAt)}</span>
                       </div>
-                      <p style={{ fontSize: '0.8125rem', color: '#1E3A8A' }}>{u.updateText}</p>
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--text-blue-strong)' }}>{u.updateText}</p>
                     </div>
                   ))}
                 </div>
@@ -310,7 +310,7 @@ export default function AdminComplaintDetail() {
 
             {/* Render Internal Confidential Notes */}
             <div>
-              <h4 style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--color-crimson-700)', borderBottom: '1px solid var(--color-slate-200)', paddingBottom: '0.35rem', marginBottom: '0.75rem' }}>
+              <h4 style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--text-crimson-strong)', borderBottom: '1px solid var(--color-slate-200)', paddingBottom: '0.35rem', marginBottom: '0.75rem' }}>
                 🔒 Internal Confidential ICC Notes ({internalNotes.length}) — Strictly Excluded from Student View
               </h4>
               {internalNotes.length === 0 ? (

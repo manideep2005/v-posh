@@ -2546,6 +2546,26 @@ html.dark .alloc-complaint-row-selected {
   border-color: rgba(59,130,246,0.25) !important;
 }
 
+/* Timeline Redressal Progress (pills and dots) */
+html.dark .pipeline-completed {
+  background: rgba(16,185,129,0.08) !important;
+  border-color: rgba(16,185,129,0.25) !important;
+  color: #6EE7B7 !important;
+}
+html.dark .pipeline-completed .pipeline-dot {
+  background-color: #6EE7B7 !important;
+}
+html.dark .pipeline-active {
+  background: rgba(59,130,246,0.08) !important;
+  border-color: rgba(59,130,246,0.25) !important;
+  color: #93C5FD !important;
+  box-shadow: 0 0 0 1px rgba(59,130,246,0.25) !important;
+}
+html.dark .pipeline-active .pipeline-dot {
+  background-color: #93C5FD !important;
+}
+
+
 /* AdminComplaintDetail / ComplaintDetail — official update bubbles */
 html.dark .official-update-bubble {
   background: var(--color-blue-50) !important;

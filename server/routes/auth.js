@@ -17,7 +17,11 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 // Poll endpoints: the browser polls every 2–3s during a push/QR login wait
 // (~45 calls per attempt). They get their own large bucket so a legitimate
 // login never trips the strict 10/15min auth limiter.
-const pollLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
+const pollLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 500 });
+
+// QR start: auto-refresh fires every 15s for a 100s session = ~7 requests.
+// Give it a dedicated generous bucket so normal usage never hits the cap.
+const qrStartLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60 });
 
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -877,7 +881,7 @@ router.post('/kratosid/push/poll', pollLimiter, async (req, res) => {
 //   1. POST /auth/kratosid/qr/start → returns QR payload to render
 //   2. POST /auth/kratosid/qr/poll  → long-polls until scan+approve
 
-router.post('/kratosid/qr/start', authLimiter, async (req, res) => {
+router.post('/kratosid/qr/start', qrStartLimiter, async (req, res) => {
   try {
     const kratos = getKratosClient();
     const qrData = await kratos.startQrLogin();
@@ -897,29 +901,31 @@ router.post('/kratosid/qr/poll', pollLimiter, async (req, res) => {
     if (!token) return res.status(400).json({ success: false, message: 'QR token required.' });
 
     const kratos = getKratosClient();
-    let result;
-    try {
-      result = await kratos.waitForQrLogin(token, { timeout: 85000 });
-    } catch (kratosErr) {
-      if (kratosErr.code === KratosIDError.NO_PRODUCT_ACCESS) {
+    
+    const resp = await kratos._get('/auth/qr/status', { token });
+    if (!resp.ok) {
+      if (resp.status === 403) {
         return res.status(403).json({ success: false, code: 'KRATOSID_NO_PRODUCT_ACCESS', message: 'KratosID product not configured.' });
       }
-      throw kratosErr;
+      console.error('QR status check failed:', await resp.text());
+      return res.status(500).json({ success: false, message: 'QR status check failed.' });
     }
 
-    if (!result.approved) {
-      const reasonMsg = result.reason === 'denied_by_user'
-        ? 'QR login denied by user.'
-        : 'QR login timed out or expired.';
-      return res.status(401).json({ success: false, code: result.reason, message: reasonMsg });
+    const data = await resp.json();
+    const status = data.status;
+
+    if (status === 'pending' || status === 'claiming' || status === 'claimed') {
+      return res.json({ success: false, approved: false, status: 'pending' });
+    }
+    if (status === 'denied') {
+      return res.status(401).json({ success: false, code: 'denied_by_user', message: 'QR login denied by user.' });
+    }
+    if (status === 'expired') {
+      return res.status(401).json({ success: false, code: 'timeout', message: 'QR login timed out or expired.' });
     }
 
     // Extract email from QR approval (KratosID returns user info in the approval)
-    let email = '';
-    try {
-      const parsed = JSON.parse(result.raw || '{}');
-      email = parsed.email || parsed.user_email || '';
-    } catch {}
+    let email = data.email || data.user_email || (data.user && data.user.email) || '';
 
     if (!email) {
       return res.status(400).json({ success: false, message: 'QR approval received but no email found. Ensure your KratosID app has your email set.' });

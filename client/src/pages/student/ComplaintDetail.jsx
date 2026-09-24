@@ -264,12 +264,12 @@ export default function ComplaintDetail() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {updates.map(u => (
-                  <div key={u.id} style={{ background: 'var(--color-blue-50)', border: '1px solid var(--border-blue)', padding: '1rem', borderRadius: 'var(--radius-sm)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.75rem', color: '#1E40AF', fontWeight: '600' }}>
+                  <div key={u.id} className="official-update-bubble" style={{ background: 'var(--color-blue-50)', border: '1px solid var(--border-blue)', padding: '1rem', borderRadius: 'var(--radius-sm)' }}>
+                    <div className="official-update-meta" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.75rem', color: 'var(--text-blue-strong)', fontWeight: '600' }}>
                       <span>Posted by {u.authorName} ({u.authorRole})</span>
                       <span>{formatDate(u.createdAt)}</span>
                     </div>
-                    <p style={{ fontSize: '0.875rem', color: '#1E3A8A', lineHeight: '1.5' }}>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--text-blue-strong)', lineHeight: '1.5' }}>
                       {u.updateText}
                     </p>
                   </div>

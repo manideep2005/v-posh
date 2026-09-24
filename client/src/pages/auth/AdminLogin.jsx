@@ -28,6 +28,7 @@ export default function AdminLogin() {
   const [pushCountdown, setPushCountdown] = useState(0);
   const pollRef = useRef(null);
   const countdownRef = useRef(null);
+  const qrRefreshRef = useRef(null);
   const rateLimited = useRateLimited(error);
   const { kratosLogin, startPushLogin, pollPushLogin, startQrLogin, pollQrLogin, login } = useAuth();
   const navigate = useNavigate();
@@ -36,6 +37,7 @@ export default function AdminLogin() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
+      if (qrRefreshRef.current) clearInterval(qrRefreshRef.current);
     };
   }, []);
 
@@ -91,37 +93,67 @@ export default function AdminLogin() {
     try {
       const res = await startQrLogin();
       setQrData(res);
-      setQrCountdown(Math.floor(res.expiresIn || 90));
+      const QR_TOTAL_MS = 100 * 1000; // 100 second session
+      const QR_REFRESH_MS = 15 * 1000; // refresh token every 15s (before 20s Kratos expiry)
+      const sessionStart = Date.now();
+      setQrCountdown(100);
+
+      // Overall 100s countdown display
       countdownRef.current = setInterval(() => {
-        setQrCountdown(prev => {
-          if (prev <= 1) { clearInterval(countdownRef.current); return 0; }
-          return prev - 1;
-        });
+        const remaining = Math.ceil((QR_TOTAL_MS - (Date.now() - sessionStart)) / 1000);
+        if (remaining <= 0) {
+          clearInterval(countdownRef.current);
+          clearInterval(qrRefreshRef.current);
+          clearInterval(pollRef.current);
+          setKratosState('idle');
+          setQrData(null);
+          setQrCountdown(0);
+          setError('QR code session expired after 100s. Please try again.');
+          return;
+        }
+        setQrCountdown(remaining);
       }, 1000);
+
+      // Auto-refresh the QR payload every 15s so it never actually expires
+      // This transparently chains new 20s Kratos tokens while the 100s window runs
+      let currentToken = res.token;
+      qrRefreshRef.current = setInterval(async () => {
+        try {
+          const fresh = await startQrLogin();
+          currentToken = fresh.token;
+          setQrData(fresh);
+        } catch (_) {
+          // Silently ignore refresh errors; existing token still valid for a few more seconds
+        }
+      }, QR_REFRESH_MS);
+
+      // Poll every 3s against the current token (updated by refresh)
       pollRef.current = setInterval(async () => {
         try {
-          const user = await pollQrLogin(res.token);
+          const user = await pollQrLogin(currentToken);
           clearInterval(pollRef.current);
           clearInterval(countdownRef.current);
+          clearInterval(qrRefreshRef.current);
           redirectByRole(user);
         } catch (err) {
-          // A 429 while polling must stop the loop — hammering a rate-limited
-          // endpoint only extends the lockout.
           if (err && err.isRateLimit) {
             clearInterval(pollRef.current);
             clearInterval(countdownRef.current);
+            clearInterval(qrRefreshRef.current);
             setKratosState('idle');
             setQrData(null);
             setError(err);
             return;
           }
-          if (err.message && (err.message.includes('timed out') || err.message.includes('denied') || err.message.includes('expired'))) {
+          if (err.message && (err.message.includes('denied'))) {
             clearInterval(pollRef.current);
             clearInterval(countdownRef.current);
+            clearInterval(qrRefreshRef.current);
             setKratosState('idle');
             setQrData(null);
             setError(err.message);
           }
+          // Pending / expired token (being refreshed) — keep polling
         }
       }, 3000);
     } catch (err) {
@@ -134,6 +166,7 @@ export default function AdminLogin() {
   const cancelQR = () => {
     if (pollRef.current) clearInterval(pollRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
+    if (qrRefreshRef.current) clearInterval(qrRefreshRef.current);
     setKratosState('idle');
     setQrData(null);
     setQrCountdown(0);

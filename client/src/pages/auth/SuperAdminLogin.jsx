@@ -28,6 +28,7 @@ export default function SuperAdminLogin() {
   const [pushCountdown, setPushCountdown] = useState(0);
   const pollRef = useRef(null);
   const countdownRef = useRef(null);
+  const qrRefreshRef = useRef(null);
   const rateLimited = useRateLimited(error);
   const { kratosLogin, startPushLogin, pollPushLogin, startQrLogin, pollQrLogin, login } = useAuth();
   const navigate = useNavigate();
@@ -36,6 +37,7 @@ export default function SuperAdminLogin() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
+      if (qrRefreshRef.current) clearInterval(qrRefreshRef.current);
     };
   }, []);
 
@@ -85,29 +87,51 @@ export default function SuperAdminLogin() {
     try {
       const res = await startQrLogin();
       setQrData(res);
-      setQrCountdown(Math.floor(res.expiresIn || 90));
+      const QR_TOTAL_MS = 100 * 1000;
+      const QR_REFRESH_MS = 15 * 1000;
+      const sessionStart = Date.now();
+      setQrCountdown(100);
+
       countdownRef.current = setInterval(() => {
-        setQrCountdown(prev => { if (prev <= 1) { clearInterval(countdownRef.current); return 0; } return prev - 1; });
+        const remaining = Math.ceil((QR_TOTAL_MS - (Date.now() - sessionStart)) / 1000);
+        if (remaining <= 0) {
+          clearInterval(countdownRef.current);
+          clearInterval(qrRefreshRef.current);
+          clearInterval(pollRef.current);
+          setKratosState('idle'); setQrData(null); setQrCountdown(0);
+          setError('QR code session expired after 100s. Please try again.');
+          return;
+        }
+        setQrCountdown(remaining);
       }, 1000);
+
+      let currentToken = res.token;
+      qrRefreshRef.current = setInterval(async () => {
+        try {
+          const fresh = await startQrLogin();
+          currentToken = fresh.token;
+          setQrData(fresh);
+        } catch (_) {}
+      }, QR_REFRESH_MS);
+
       pollRef.current = setInterval(async () => {
         try {
-          const user = await pollQrLogin(res.token);
-          clearInterval(pollRef.current); clearInterval(countdownRef.current);
+          const user = await pollQrLogin(currentToken);
+          clearInterval(pollRef.current); clearInterval(countdownRef.current); clearInterval(qrRefreshRef.current);
           if (user.role === 'super_admin') navigate('/super-admin/dashboard');
           else if (user.role === 'faculty') navigate('/faculty/dashboard');
           else navigate('/admin/dashboard');
         } catch (err) {
-          // A 429 while polling must stop the loop — hammering a rate-limited
-          // endpoint only extends the lockout.
           if (err && err.isRateLimit) {
-            clearInterval(pollRef.current); clearInterval(countdownRef.current);
+            clearInterval(pollRef.current); clearInterval(countdownRef.current); clearInterval(qrRefreshRef.current);
             setKratosState('idle'); setQrData(null); setError(err);
             return;
           }
-          if (err.message && (err.message.includes('timed out') || err.message.includes('denied') || err.message.includes('expired'))) {
-            clearInterval(pollRef.current); clearInterval(countdownRef.current);
+          if (err.message && err.message.includes('denied')) {
+            clearInterval(pollRef.current); clearInterval(countdownRef.current); clearInterval(qrRefreshRef.current);
             setKratosState('idle'); setQrData(null); setError(err.message);
           }
+          // Pending / refreshing — keep polling
         }
       }, 3000);
     } catch (err) { setKratosState('idle'); setQrData(null); setError(toErrorState(err, 'Failed to start QR login.')); }
@@ -116,6 +140,7 @@ export default function SuperAdminLogin() {
   const cancelQR = () => {
     if (pollRef.current) clearInterval(pollRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
+    if (qrRefreshRef.current) clearInterval(qrRefreshRef.current);
     setKratosState('idle'); setQrData(null); setQrCountdown(0);
   };
 
