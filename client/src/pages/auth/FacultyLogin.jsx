@@ -117,6 +117,7 @@ export default function FacultyLogin() {
       pollRef.current = setInterval(async () => {
         try {
           const user = await pollQrLogin(currentToken);
+          if (!user) return; // not scanned yet — keep polling
           clearInterval(pollRef.current);
           clearInterval(countdownRef.current);
           clearInterval(qrRefreshRef.current);

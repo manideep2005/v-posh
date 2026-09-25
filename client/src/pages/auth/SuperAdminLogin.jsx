@@ -117,6 +117,7 @@ export default function SuperAdminLogin() {
       pollRef.current = setInterval(async () => {
         try {
           const user = await pollQrLogin(currentToken);
+          if (!user) return; // not scanned yet — keep polling
           clearInterval(pollRef.current); clearInterval(countdownRef.current); clearInterval(qrRefreshRef.current);
           if (user.role === 'super_admin') navigate('/super-admin/dashboard');
           else if (user.role === 'faculty') navigate('/faculty/dashboard');

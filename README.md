@@ -162,6 +162,16 @@ persistent disk is required.
    | `SMTP_PASS` | 16-character Google **App Password** for that mailbox |
    | `ICC_NOTIFICATION_EMAIL` | `vposh@vitap.ac.in` — receives new-complaint / breach copies |
    | `EMAIL_LINK_BASE_URL` | optional; base URL for deep links inside emails |
+   | `KRATOSID_API_KEY` | KratosID API key — passwordless push/QR sign-in |
+   | `KRATOSID_PRODUCT_ID` | KratosID product ID |
+   | `KRATOSID_BASE_URL` | `https://api-prod.kratosid.com` — **set this explicitly**; the old `api.kratosid.com` host does not resolve |
+   | `KRATOSID_APP_NAME` | label shown on the mobile approval prompt (e.g. `vposh`) |
+   | `GOOGLE_CLIENT_ID` | same value as `VITE_GOOGLE_CLIENT_ID`; the server verifies Google sign-ins with it |
+   | `VITE_GOOGLE_CLIENT_ID` | Google OAuth client ID, baked into the client build |
+
+   > `.env` is gitignored and is **not** deployed, so every KratosID / Google
+   > value must be added here in the Vercel dashboard. If KratosID is
+   > unconfigured the Kratos endpoints answer `503 KRATOSID_NOT_CONFIGURED`.
 
 3. Deploy. First boot creates indexes and bootstraps departments/categories.
 4. Seed the demo/institutional accounts **once**, from your machine against

@@ -90,6 +90,9 @@ export function AuthProvider({ children }) {
       setUser(res.user);
       return res.user;
     }
+    // 200 with approved:false means "not scanned yet" — the caller keeps
+    // polling. Only a real failure should surface as an error.
+    if (res.approved === false && res.status === 'pending') return null;
     throw new Error(res.message || 'QR login failed');
   };
 

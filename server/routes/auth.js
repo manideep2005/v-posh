@@ -563,15 +563,19 @@ const { KratosIDClient, KratosIDError } = require('../../javascript/src/index.js
 let _kratosClient = null;
 let _kratosClientKey = null;
 function getKratosClient() {
-  // Read directly from process.env so changes after startup are picked up
-  const apiKey = process.env.KRATOSID_API_KEY || config.KRATOSID_API_KEY;
-  const productId = process.env.KRATOSID_PRODUCT_ID || config.KRATOSID_PRODUCT_ID;
-  const baseUrl = process.env.KRATOSID_BASE_URL || config.KRATOSID_BASE_URL;
-  const appName = process.env.KRATOSID_APP_NAME || config.KRATOSID_APP_NAME;
+  // Always go through config: it normalizes stray quotes/whitespace on pasted
+  // env values and maps the retired api.kratosid.com host to the live one.
+  // Reading process.env directly here would bypass both.
+  const apiKey = config.KRATOSID_API_KEY;
+  const productId = config.KRATOSID_PRODUCT_ID;
+  const baseUrl = config.KRATOSID_BASE_URL;
+  const appName = config.KRATOSID_APP_NAME;
   const key = `${apiKey}:${productId}:${baseUrl}`;
   if (_kratosClient && _kratosClientKey === key) return _kratosClient;
   if (!apiKey || !productId) {
-    throw new Error('KratosID is not configured. Set KRATOSID_API_KEY and KRATOSID_PRODUCT_ID.');
+    const err = new Error('KratosID is not configured. Set KRATOSID_API_KEY and KRATOSID_PRODUCT_ID.');
+    err.code = 'KRATOSID_NOT_CONFIGURED';
+    throw err;
   }
   _kratosClient = new KratosIDClient({
     apiKey,
@@ -583,10 +587,30 @@ function getKratosClient() {
   return _kratosClient;
 }
 
+// Guard mounted on every Kratos route. A deployment can be missing the Kratos
+// environment variables (locally they come from .env, which is gitignored and
+// therefore absent on Vercel) — answer with an actionable 503 naming the
+// missing config instead of the generic 500 "server error" that used to hide it.
+function requireKratosConfig(req, res, next) {
+  try {
+    getKratosClient();
+    return next();
+  } catch (err) {
+    if (err.code === 'KRATOSID_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        code: 'KRATOSID_NOT_CONFIGURED',
+        message: 'KratosID is not configured on this deployment. Set KRATOSID_API_KEY, KRATOSID_PRODUCT_ID and KRATOSID_BASE_URL in the environment.'
+      });
+    }
+    return next(err);
+  }
+}
+
 // POST /api/auth/kratosid/verify
 // Sends a push-auth request to the user's KratosID mobile app and waits.
 // Returns JWT immediately when approved (long-poll, ≤55s).
-router.post('/kratosid/verify', authLimiter, async (req, res) => {
+router.post('/kratosid/verify', authLimiter, requireKratosConfig, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !isValidEmail(email)) {
@@ -684,7 +708,7 @@ router.post('/kratosid/verify', authLimiter, async (req, res) => {
 // Pending push requests stored via db module (survives Vercel serverless cold starts).
 // Each entry auto-expires after 2 minutes — checked at poll time.
 
-router.post('/kratosid/push/start', authLimiter, async (req, res) => {
+router.post('/kratosid/push/start', authLimiter, requireKratosConfig, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !isValidEmail(email)) {
@@ -747,7 +771,7 @@ router.post('/kratosid/push/start', authLimiter, async (req, res) => {
   }
 });
 
-router.post('/kratosid/push/poll', pollLimiter, async (req, res) => {
+router.post('/kratosid/push/poll', pollLimiter, requireKratosConfig, async (req, res) => {
   try {
     const { token } = req.body;
     if (!token) return res.status(400).json({ success: false, message: 'Push token required.' });
@@ -756,10 +780,32 @@ router.post('/kratosid/push/poll', pollLimiter, async (req, res) => {
     if (!pending) {
       return res.status(404).json({ success: false, message: 'Push request expired or not found.' });
     }
-    // Auto-expire entries older than 2 minutes
+
+    // Auto-expire entries older than 2 minutes. Checked before the replay below
+    // so an approved record never outlives the normal approval window.
     if (pending.createdAt && (Date.now() - new Date(pending.createdAt).getTime()) > 120000) {
       await db.pendingPushes.deleteOne(token);
       return res.status(404).json({ success: false, message: 'Push request expired or not found.' });
+    }
+
+    // Idempotent replay. The browser polls every 2s, and on Vercel the approval
+    // response is deliberately held until the welcome-email queue drains (see
+    // the res.send wrapper in app.js), so several polls arrive AFTER the request
+    // was already approved. Previously they found the record already deleted and
+    // answered 404 "not found", which the client treats as a hard failure —
+    // surfacing as "push auth not working" on Vercel only. Replay the approval
+    // instead of re-asking KratosID, whose token is single-use.
+    if (pending.approvedUserId) {
+      const approvedUser = await db.users.findById(pending.approvedUserId);
+      if (approvedUser) {
+        return res.json({
+          success: true,
+          approved: true,
+          message: 'KratosID authentication approved.',
+          token: signToken(approvedUser),
+          user: sanitizeUser(approvedUser)
+        });
+      }
     }
 
     const kratos = getKratosClient();
@@ -811,8 +857,8 @@ router.post('/kratosid/push/poll', pollLimiter, async (req, res) => {
       return res.json({ success: false, approved: false, status: 'unknown', message: 'Unexpected response from KratosID.' });
     }
 
-    // Approved! Issue JWT
-    await db.pendingPushes.deleteOne(token);
+    // Approved! Resolve the account and persist the approval BEFORE responding
+    // so any concurrent/retried poll replays it instead of racing a delete.
     const normalizedEmail = pending.email;
     const localPart = normalizedEmail.split('@')[0];
     let user = await db.users.findOne({ email: normalizedEmail });
@@ -863,6 +909,11 @@ router.post('/kratosid/push/poll', pollLimiter, async (req, res) => {
       logAuditAction(req, 'USER_LOGIN_KRATOSID', 'USER', user.id, `KratosID push login: ${user.name} (${user.role})`);
     }
 
+    // Persist the approval so concurrent / retried polls replay it instead of
+    // racing a delete (see the approvedUserId check at the top of this handler).
+    // The 3-minute cleanup in push/start removes it; nothing lives longer.
+    await db.pendingPushes.updateOne(token, { approvedUserId: user.id });
+
     return res.json({
       success: true,
       approved: true,
@@ -881,7 +932,7 @@ router.post('/kratosid/push/poll', pollLimiter, async (req, res) => {
 //   1. POST /auth/kratosid/qr/start → returns QR payload to render
 //   2. POST /auth/kratosid/qr/poll  → long-polls until scan+approve
 
-router.post('/kratosid/qr/start', qrStartLimiter, async (req, res) => {
+router.post('/kratosid/qr/start', qrStartLimiter, requireKratosConfig, async (req, res) => {
   try {
     const kratos = getKratosClient();
     const qrData = await kratos.startQrLogin();
@@ -895,7 +946,7 @@ router.post('/kratosid/qr/start', qrStartLimiter, async (req, res) => {
   }
 });
 
-router.post('/kratosid/qr/poll', pollLimiter, async (req, res) => {
+router.post('/kratosid/qr/poll', pollLimiter, requireKratosConfig, async (req, res) => {
   try {
     const { token } = req.body;
     if (!token) return res.status(400).json({ success: false, message: 'QR token required.' });

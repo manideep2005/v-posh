@@ -1,3 +1,31 @@
+// Env values are often pasted with stray quotes/whitespace — e.g. a Vercel
+// dashboard entry written as KRATOSID_BASE_URL="https://..." keeps the quotes
+// literally, which would build an invalid request URL. Normalize them.
+function cleanEnv(value) {
+  if (typeof value !== 'string') return value;
+  let v = value.trim();
+  if (v.length >= 2 && (v[0] === '"' || v[0] === "'") && v[v.length - 1] === v[0]) {
+    v = v.slice(1, -1).trim();
+  }
+  return v;
+}
+
+// Hostname the KratosID vendor retired. It no longer resolves (ENOTFOUND), so
+// a deployment still pointing at it fails every Kratos call. Treat it as unset.
+const RETIRED_KRATOS_HOST = 'https://api.kratosid.com';
+const KRATOS_PROD_HOST = 'https://api-prod.kratosid.com';
+
+function resolveKratosBaseUrl() {
+  const raw = cleanEnv(process.env.KRATOSID_BASE_URL) || KRATOS_PROD_HOST;
+  const normalized = raw.replace(/\/+$/, '');
+  if (normalized === RETIRED_KRATOS_HOST) {
+    console.warn('[config] KRATOSID_BASE_URL points at ' + RETIRED_KRATOS_HOST +
+      ', which no longer resolves. Using ' + KRATOS_PROD_HOST + ' instead — update the environment variable.');
+    return KRATOS_PROD_HOST;
+  }
+  return normalized;
+}
+
 module.exports = {
   PORT: process.env.PORT || 5001,
   JWT_SECRET: process.env.JWT_SECRET || 'dev-only-secret-change-me-in-production-8f3a91c2',
@@ -29,10 +57,13 @@ module.exports = {
       return acc;
     }, {}),
   // KratosID passwordless auth
-  KRATOSID_API_KEY: process.env.KRATOSID_API_KEY || '',
-  KRATOSID_PRODUCT_ID: process.env.KRATOSID_PRODUCT_ID || '',
-  KRATOSID_BASE_URL: process.env.KRATOSID_BASE_URL || 'https://api.kratosid.com',
-  KRATOSID_APP_NAME: process.env.KRATOSID_APP_NAME || 'KratosID',
+  KRATOSID_API_KEY: cleanEnv(process.env.KRATOSID_API_KEY) || '',
+  KRATOSID_PRODUCT_ID: cleanEnv(process.env.KRATOSID_PRODUCT_ID) || '',
+  // Production host is api-prod.kratosid.com (api.kratosid.com does not
+  // resolve — a missing env var used to silently point every Kratos call at a
+  // dead hostname on Vercel, where .env is not deployed).
+  KRATOSID_BASE_URL: resolveKratosBaseUrl(),
+  KRATOSID_APP_NAME: cleanEnv(process.env.KRATOSID_APP_NAME) || 'KratosID',
 
   // Shared secret for scheduled maintenance jobs (escalation sweep, ledger
   // checks). On Vercel set the same value as CRON_SECRET so Cron can call it.

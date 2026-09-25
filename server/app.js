@@ -69,7 +69,7 @@ function createApp() {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://api.kratosid.com https://oauth2.googleapis.com https://www.googleapis.com",
+      "connect-src 'self' https://api-prod.kratosid.com https://api-sandbox.kratosid.com https://oauth2.googleapis.com https://www.googleapis.com",
       "frame-src https://accounts.google.com",
       "object-src 'none'",
       "base-uri 'self'",
@@ -78,6 +78,14 @@ function createApp() {
     next();
   });
   app.disable('x-powered-by');
+
+  // Behind Vercel's proxy the socket peer is the local edge, so without this
+  // req.ip is the same for every visitor and the in-memory rate-limit buckets
+  // (login, push/start, push/poll) are shared across ALL users — a handful of
+  // sign-ins then 429s the whole deployment. Trusting the proxy makes req.ip
+  // reflect the real client via X-Forwarded-For, as it already does for
+  // password-reset links.
+  app.set('trust proxy', true);
 
   // CORS — explicit allow-list, plus automatic same-origin support so the
   // API works on any deployment domain (e.g. the Vercel URL) with zero config.

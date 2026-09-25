@@ -7,7 +7,7 @@ const DEFAULT_BASE_URL = 'https://v1.quantanex.io'
 
 // Named KratosID environment hosts, selected via the `environment` option.
 const SANDBOX_BASE_URL = 'https://api-sandbox.kratosid.com'
-const PRODUCTION_BASE_URL = 'https://api.kratosid.com'
+const PRODUCTION_BASE_URL = 'https://api-prod.kratosid.com'
 
 const DEFAULT_TIMEOUT = 55000       // ms
 const DEFAULT_POLL_INTERVAL = 2000  // ms
