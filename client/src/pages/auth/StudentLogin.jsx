@@ -104,44 +104,30 @@ export default function StudentLogin() {
     try {
       const res = await startQrLogin();
       setQrData(res);
-      const QR_TOTAL_MS = 100 * 1000;
-      // KratosID hard-codes each QR code to ~18s, so rotate just before expiry.
-      const QR_REFRESH_MS = Math.max(8, (res.expiresIn || 18) - 3) * 1000;
-      const sessionStart = Date.now();
-      setQrCountdown(100);
+      // One fixed code, simply polled — never rotated. KratosID expires a QR code
+      // ~18s after it is created (hard-coded server-side; no request parameter
+      // extends it), so show the code's real remaining life and offer a fresh one
+      // when it lapses. Swapping the code out from under a scan is what made the
+      // KratosID app report "expired".
+      const expiresAtMs = res.expiresAt ? res.expiresAt * 1000 : Date.now() + (res.expiresIn || 18) * 1000;
+      setQrCountdown(Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)));
 
-      // Overall 100s countdown
       countdownRef.current = setInterval(() => {
-        const remaining = Math.ceil((QR_TOTAL_MS - (Date.now() - sessionStart)) / 1000);
+        const remaining = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000));
+        setQrCountdown(remaining);
         if (remaining <= 0) {
           clearInterval(countdownRef.current);
-          clearInterval(qrRefreshRef.current);
           clearInterval(pollRef.current);
           setKratosState('idle');
           setQrData(null);
-          setQrCountdown(0);
-          setError('QR code session expired after 100s. Please try again.');
-          return;
+          setError('That QR code expired before it was scanned. Generate a new one and scan it straight away.');
         }
-        setQrCountdown(remaining);
       }, 1000);
 
-      // Roll a window of codes: the one on screen plus the recent ones the user
-      // may already have scanned. The server approves on any of them, so a slow
-      // scan is no longer lost when the display rotates.
-      let currentToken = [res.token];
-      qrRefreshRef.current = setInterval(async () => {
-        try {
-          const fresh = await startQrLogin();
-          currentToken = [fresh.token, ...currentToken].slice(0, 4);
-          setQrData(fresh);
-        } catch (_) {}
-      }, QR_REFRESH_MS);
-
-      // Poll every 3s against the latest token
+      // Poll the displayed code until it is approved or lapses.
       pollRef.current = setInterval(async () => {
         try {
-          const user = await pollQrLogin(currentToken);
+          const user = await pollQrLogin(res.token);
           if (!user) return; // not scanned yet — keep polling
           clearInterval(pollRef.current);
           clearInterval(countdownRef.current);
