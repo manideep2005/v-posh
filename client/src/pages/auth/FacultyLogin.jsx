@@ -88,7 +88,8 @@ export default function FacultyLogin() {
       const res = await startQrLogin();
       setQrData(res);
       const QR_TOTAL_MS = 100 * 1000;
-      const QR_REFRESH_MS = 15 * 1000;
+      // KratosID hard-codes each QR code to ~18s, so rotate just before expiry.
+      const QR_REFRESH_MS = Math.max(8, (res.expiresIn || 18) - 3) * 1000;
       const sessionStart = Date.now();
       setQrCountdown(100);
 
@@ -105,11 +106,14 @@ export default function FacultyLogin() {
         setQrCountdown(remaining);
       }, 1000);
 
-      let currentToken = res.token;
+      // Roll a window of codes: the one on screen plus the recent ones the user
+      // may already have scanned. The server approves on any of them, so a slow
+      // scan is no longer lost when the display rotates.
+      let currentToken = [res.token];
       qrRefreshRef.current = setInterval(async () => {
         try {
           const fresh = await startQrLogin();
-          currentToken = fresh.token;
+          currentToken = [fresh.token, ...currentToken].slice(0, 4);
           setQrData(fresh);
         } catch (_) {}
       }, QR_REFRESH_MS);

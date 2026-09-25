@@ -752,6 +752,9 @@ router.post('/kratosid/push/start', authLimiter, requireKratosConfig, async (req
     await db.pendingPushes.insertOne({
       id: pushToken,
       email: normalizedEmail,
+      // Every notification sent for this request; the poll checks all of them so
+      // an approval on a superseded (re-sent) push is still recognised.
+      pushTokens: [pushToken],
       createdAt: new Date().toISOString()
     });
 
@@ -809,52 +812,86 @@ router.post('/kratosid/push/poll', pollLimiter, requireKratosConfig, async (req,
     }
 
     const kratos = getKratosClient();
-    // KratosID's push itself only lives ~30s on their side. Poll with the
-    // CURRENT push token (it may have been auto-re-sent) so the overall
-    // 90-second approval window survives multiple push lifetimes.
-    const activeToken = pending.currentPushToken || token;
-    const resp = await kratos._post('/get_data', { token: activeToken });
-    const status = (await resp.text()).trim();
 
-    if (status.startsWith('pending')) {
-      return res.json({ success: false, approved: false, status: 'pending' });
+    // Every push token issued for this request: the original plus any resends.
+    // KratosID drops a notification after ~20s, and a resend SUPERSEDES the
+    // previous one, so the user may well approve an older notification. Check
+    // all of them newest-first — polling only the newest token orphaned that
+    // approval and surfaced as "push denied"/timeout.
+    const issued = (Array.isArray(pending.pushTokens) && pending.pushTokens.length
+      ? pending.pushTokens
+      : [pending.currentPushToken || token]).filter(Boolean);
+
+    let sawPending = false;
+    let sawDenied = false;
+    let approvedRaw = null;
+
+    for (const tk of [...issued].reverse()) {
+      let status = '';
+      try {
+        const r = await kratos._post('/get_data', { token: tk });
+        status = (await r.text()).trim();
+      } catch (_) {
+        // A transient KratosID error must never be read as a user denial.
+        sawPending = true;
+        continue;
+      }
+
+      if (status.startsWith('pending') || status.startsWith('Authorization timeout')) {
+        sawPending = true;
+        continue;
+      }
+      if (status === 'Authorization denied') {
+        sawDenied = true;
+        continue;
+      }
+      if (status.startsWith('expired')) {
+        // This notification's ~20s window closed — other tokens may still be live.
+        continue;
+      }
+
+      let ok = false;
+      try {
+        const data = JSON.parse(status);
+        ok = (Array.isArray(data) && data.length > 0) || Boolean(data && data.Verification);
+      } catch (_) { ok = false; }
+
+      if (ok) { approvedRaw = status; break; }
     }
-    if (status.startsWith('expired') || status === 'Authorization denied') {
-      await db.pendingPushes.deleteOne(token);
-      return res.json({ success: false, approved: false, status: 'denied', message: 'Push denied by user.' });
-    }
-    if (status.startsWith('Authorization timeout')) {
-      // Auto-resend the push (up to 2 resends ≈ 30s + 30s + 30s = 90s total)
-      // instead of dying at KratosID's ~30s single-push lifetime.
+
+    if (!approvedRaw) {
+      // 'expired' means the request is gone, NOT that the user rejected it. Only
+      // an explicit 'Authorization denied' from KratosID is a denial.
+      if (sawDenied) {
+        await db.pendingPushes.deleteOne(token);
+        return res.json({ success: false, approved: false, status: 'denied', message: 'Authentication denied on your KratosID app.' });
+      }
+      if (sawPending) {
+        return res.json({ success: false, approved: false, status: 'pending' });
+      }
+
+      // Every issued notification lapsed without a decision: send a fresh push
+      // (up to 2 resends) so the overall wait outlives the short per-notification
+      // lifetime instead of failing on the first quiet notification.
       const resendCount = pending.resendCount || 0;
       if (resendCount < 2) {
         try {
           const resend = await kratos._post('/add_request', { email: pending.email, data: '0000', requester: config.KRATOSID_APP_NAME });
           const newText = (await resend.text()).trim();
           if (resend.ok && !newText.startsWith('0000')) {
+            const newToken = newText.slice(0, 36);
             await db.pendingPushes.updateOne(token, {
-              currentPushToken: newText.slice(0, 36),
+              pushTokens: [...issued, newToken],
+              currentPushToken: newToken,
               resendCount: resendCount + 1
             });
             return res.json({ success: false, approved: false, status: 'pending', resent: true });
           }
-        } catch (_) { /* fall through to final timeout below */ }
+        } catch (_) { /* fall through to expiry below */ }
       }
-      await db.pendingPushes.deleteOne(token);
-      return res.json({ success: false, approved: false, status: 'timeout', message: 'Push timed out.' });
-    }
 
-    // Try to parse as approved data
-    let approved = false;
-    try {
-      const data = JSON.parse(status);
-      if (Array.isArray(data) && data.length > 0) approved = true;
-      if (data && data.Verification) approved = true;
-    } catch (_) {}
-
-    if (!approved) {
       await db.pendingPushes.deleteOne(token);
-      return res.json({ success: false, approved: false, status: 'unknown', message: 'Unexpected response from KratosID.' });
+      return res.json({ success: false, approved: false, status: 'expired', message: 'This sign-in request expired before it was approved. Please try again.' });
     }
 
     // Approved! Resolve the account and persist the approval BEFORE responding
@@ -948,33 +985,58 @@ router.post('/kratosid/qr/start', qrStartLimiter, requireKratosConfig, async (re
 
 router.post('/kratosid/qr/poll', pollLimiter, requireKratosConfig, async (req, res) => {
   try {
-    const { token } = req.body;
-    if (!token) return res.status(400).json({ success: false, message: 'QR token required.' });
+    // Accepts a single `token` or the list of codes issued during this attempt.
+    // KratosID hard-codes the QR session to ~18 SECONDS (no request parameter
+    // extends it — verified), so the UI legitimately rotates the code while the
+    // user is scanning. Checking only the newest token meant an approval on the
+    // code actually on their screen was never seen and surfaced as "QR expired".
+    const { token, tokens } = req.body;
+    const issued = (Array.isArray(tokens) && tokens.length ? tokens : [token]).filter(Boolean).slice(0, 6);
+    if (!issued.length) return res.status(400).json({ success: false, message: 'QR token required.' });
 
     const kratos = getKratosClient();
-    
-    const resp = await kratos._get('/auth/qr/status', { token });
-    if (!resp.ok) {
-      if (resp.status === 403) {
-        return res.status(403).json({ success: false, code: 'KRATOSID_NO_PRODUCT_ACCESS', message: 'KratosID product not configured.' });
+
+    let approvedData = null;
+    let sawPending = false;
+    let sawDenied = false;
+    let lastError = null;
+
+    for (const tk of [...issued].reverse()) {
+      const resp = await kratos._get('/auth/qr/status', { token: tk });
+      if (!resp.ok) {
+        if (resp.status === 403) {
+          return res.status(403).json({ success: false, code: 'KRATOSID_NO_PRODUCT_ACCESS', message: 'KratosID product not configured.' });
+        }
+        lastError = await resp.text();
+        continue;
       }
-      console.error('QR status check failed:', await resp.text());
-      return res.status(500).json({ success: false, message: 'QR status check failed.' });
+
+      let data;
+      try { data = await resp.json(); } catch (_) { continue; }
+      const status = data.status;
+
+      if (status === 'approved') { approvedData = data; break; }
+      if (status === 'denied') { sawDenied = true; continue; }
+      if (status === 'expired') continue;   // this code lapsed — an older one may hold the approval
+      sawPending = true;                   // pending / claiming / claimed
     }
 
-    const data = await resp.json();
-    const status = data.status;
+    if (!approvedData) {
+      if (sawDenied) {
+        return res.status(401).json({ success: false, code: 'denied_by_user', message: 'QR login denied by user.' });
+      }
+      if (sawPending) {
+        return res.json({ success: false, approved: false, status: 'pending' });
+      }
+      if (lastError) {
+        console.error('QR status check failed:', lastError);
+        return res.status(500).json({ success: false, message: 'QR status check failed.' });
+      }
+      // Every code this session has lapsed; the UI rotates and keeps waiting.
+      return res.json({ success: false, approved: false, status: 'expired', message: 'This QR code expired — a fresh one has been generated.' });
+    }
 
-    if (status === 'pending' || status === 'claiming' || status === 'claimed') {
-      return res.json({ success: false, approved: false, status: 'pending' });
-    }
-    if (status === 'denied') {
-      return res.status(401).json({ success: false, code: 'denied_by_user', message: 'QR login denied by user.' });
-    }
-    if (status === 'expired') {
-      return res.status(401).json({ success: false, code: 'timeout', message: 'QR login timed out or expired.' });
-    }
-
+    const data = approvedData;
     // Extract email from QR approval (KratosID returns user info in the approval)
     let email = data.email || data.user_email || (data.user && data.user.email) || '';
 

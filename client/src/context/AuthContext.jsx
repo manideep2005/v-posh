@@ -80,19 +80,23 @@ export function AuthProvider({ children }) {
     return res; // { token, qrPayload, expiresAt, expiresIn }
   };
 
-  const pollQrLogin = async (qrToken) => {
+  // Accepts one code or the list of codes issued during this attempt. KratosID's
+  // QR session lives only ~18s, so callers rotate codes and pass every recent
+  // one; the server approves on whichever code the user actually scanned.
+  const pollQrLogin = async (qrTokens) => {
+    const tokens = Array.isArray(qrTokens) ? qrTokens : [qrTokens];
     const res = await apiFetch('/auth/kratosid/qr/poll', {
       method: 'POST',
-      body: JSON.stringify({ token: qrToken })
+      body: JSON.stringify({ tokens })
     });
     if (res.success && res.token) {
       localStorage.setItem('vposh_token', res.token);
       setUser(res.user);
       return res.user;
     }
-    // 200 with approved:false means "not scanned yet" — the caller keeps
-    // polling. Only a real failure should surface as an error.
-    if (res.approved === false && res.status === 'pending') return null;
+    // Still waiting: unscanned, or the current code lapsed and a fresh one was
+    // generated. Only a real failure (denied / rate limit) surfaces as an error.
+    if (res.approved === false && (res.status === 'pending' || res.status === 'expired')) return null;
     throw new Error(res.message || 'QR login failed');
   };
 
