@@ -205,7 +205,7 @@ export default function SuperAdminLogin() {
             <div style={{ textAlign: 'center' }}>
               {!qrData ? (
                 <>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-slate-500)', marginBottom: '1rem' }}>Scan a QR code with your KratosID mobile app.</p>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-slate-500)', marginBottom: '1rem' }}>Scan a QR code with your KratosID mobile app. The code is valid for only about 18 seconds, so scan it as soon as it appears.</p>
                   <button onClick={handleStartQR} className="btn btn-primary" style={{ width: '100%', padding: '0.65rem', fontWeight: '700', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><QrCode size={16} /> Generate QR Code</button>
                 </>
               ) : (

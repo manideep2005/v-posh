@@ -207,7 +207,7 @@ export default function FacultyLogin() {
             <div style={{ textAlign: 'center' }}>
               {!qrData ? (
                 <>
-                  <p style={{ fontSize: '0.8125rem', color: '#94A3B8', marginBottom: '1rem' }}>Scan a QR code with your KratosID mobile app.</p>
+                  <p style={{ fontSize: '0.8125rem', color: '#94A3B8', marginBottom: '1rem' }}>Scan a QR code with your KratosID mobile app. The code is valid for only about 18 seconds, so scan it as soon as it appears.</p>
                   <button onClick={handleStartQR} style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: '#14B8A6', color: '#fff', fontWeight: '700', fontSize: '0.9rem', border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><QrCode size={16} /> Generate QR Code</button>
                 </>
               ) : (

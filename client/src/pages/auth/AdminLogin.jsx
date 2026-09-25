@@ -286,7 +286,7 @@ export default function AdminLogin() {
               {!qrData ? (
                 <>
                   <p style={{ fontSize: '0.8125rem', color: '#94A3B8', marginBottom: '1rem' }}>
-                    Scan a QR code with your KratosID mobile app to sign in.
+                    Scan a QR code with your KratosID mobile app. The code is valid for only about 18 seconds, so scan it as soon as it appears.
                   </p>
                   <button
                     onClick={handleStartQR}
