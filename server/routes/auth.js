@@ -986,10 +986,10 @@ router.post('/kratosid/qr/start', qrStartLimiter, requireKratosConfig, async (re
 router.post('/kratosid/qr/poll', pollLimiter, requireKratosConfig, async (req, res) => {
   try {
     // Accepts a single `token` or the list of codes issued during this attempt.
-    // KratosID hard-codes the QR session to ~18 SECONDS (no request parameter
-    // extends it — verified), so the UI legitimately rotates the code while the
-    // user is scanning. Checking only the newest token meant an approval on the
-    // code actually on their screen was never seen and surfaced as "QR expired".
+    // KratosID sets the QR session lifetime server-side (currently 50s; it is not
+    // a request parameter), so a session can span several codes. Checking only the
+    // newest token meant an approval on the code actually on their screen was
+    // never seen and surfaced as "QR expired".
     const { token, tokens } = req.body;
     const issued = (Array.isArray(tokens) && tokens.length ? tokens : [token]).filter(Boolean).slice(0, 6);
     if (!issued.length) return res.status(400).json({ success: false, message: 'QR token required.' });
@@ -1032,8 +1032,8 @@ router.post('/kratosid/qr/poll', pollLimiter, requireKratosConfig, async (req, r
         console.error('QR status check failed:', lastError);
         return res.status(500).json({ success: false, message: 'QR status check failed.' });
       }
-      // Every code this session has lapsed; the UI rotates and keeps waiting.
-      return res.json({ success: false, approved: false, status: 'expired', message: 'This QR code expired — a fresh one has been generated.' });
+      // Every code this session checked has lapsed server-side.
+      return res.json({ success: false, approved: false, status: 'expired', message: 'This QR code expired. Generate a new one and scan it straight away.' });
     }
 
     const data = approvedData;

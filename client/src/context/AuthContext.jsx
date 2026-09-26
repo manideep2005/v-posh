@@ -80,9 +80,9 @@ export function AuthProvider({ children }) {
     return res; // { token, qrPayload, expiresAt, expiresIn }
   };
 
-  // Accepts one code or the list of codes issued during this attempt. KratosID's
-  // QR session lives only ~18s, so callers rotate codes and pass every recent
-  // one; the server approves on whichever code the user actually scanned.
+  // Accepts one code, or the list of codes issued during this attempt. KratosID
+  // controls the QR session lifetime server-side (returned as expiresIn), so the
+  // server approves on whichever code the user actually scanned.
   const pollQrLogin = async (qrTokens) => {
     const tokens = Array.isArray(qrTokens) ? qrTokens : [qrTokens];
     const res = await apiFetch('/auth/kratosid/qr/poll', {

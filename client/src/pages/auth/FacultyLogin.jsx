@@ -28,7 +28,6 @@ export default function FacultyLogin() {
   const [pushCountdown, setPushCountdown] = useState(0);
   const pollRef = useRef(null);
   const countdownRef = useRef(null);
-  const qrRefreshRef = useRef(null);
   const rateLimited = useRateLimited(error);
   const { kratosLogin, startPushLogin, pollPushLogin, startQrLogin, pollQrLogin } = useAuth();
   const navigate = useNavigate();
@@ -37,7 +36,6 @@ export default function FacultyLogin() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
-      if (qrRefreshRef.current) clearInterval(qrRefreshRef.current);
     };
   }, []);
 
@@ -87,12 +85,12 @@ export default function FacultyLogin() {
     try {
       const res = await startQrLogin();
       setQrData(res);
-      // One fixed code, simply polled — never rotated. KratosID expires a QR code
-      // ~18s after it is created (hard-coded server-side; no request parameter
-      // extends it), so show the code's real remaining life and offer a fresh one
-      // when it lapses. Swapping the code out from under a scan is what made the
-      // KratosID app report "expired".
-      const expiresAtMs = res.expiresAt ? res.expiresAt * 1000 : Date.now() + (res.expiresIn || 18) * 1000;
+      // One fixed code, simply polled — never rotated. KratosID controls how long
+      // a QR code lives server-side (it is not a request parameter), so we always
+      // show the code's real remaining life from the response and offer a fresh
+      // one when it lapses. Swapping the code out from under a scan is what made
+      // the KratosID app report "expired".
+      const expiresAtMs = res.expiresAt ? res.expiresAt * 1000 : Date.now() + (res.expiresIn || 60) * 1000;
       setQrCountdown(Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)));
 
       countdownRef.current = setInterval(() => {
@@ -113,21 +111,20 @@ export default function FacultyLogin() {
           if (!user) return; // not scanned yet — keep polling
           clearInterval(pollRef.current);
           clearInterval(countdownRef.current);
-          clearInterval(qrRefreshRef.current);
           if (user.role === 'super_admin') navigate('/super-admin/dashboard');
           else if (user.role === 'faculty') navigate('/faculty/dashboard');
           else navigate('/admin/dashboard');
         } catch (err) {
           if (err && err.isRateLimit) {
-            clearInterval(pollRef.current); clearInterval(countdownRef.current); clearInterval(qrRefreshRef.current);
+            clearInterval(pollRef.current); clearInterval(countdownRef.current);
             setKratosState('idle'); setQrData(null); setError(err);
             return;
           }
           if (err.message && err.message.includes('denied')) {
-            clearInterval(pollRef.current); clearInterval(countdownRef.current); clearInterval(qrRefreshRef.current);
+            clearInterval(pollRef.current); clearInterval(countdownRef.current);
             setKratosState('idle'); setQrData(null); setError(err.message);
           }
-          // Pending / refreshing — keep polling
+          // Still pending — keep polling until the code is approved or lapses
         }
       }, 3000);
     } catch (err) { setKratosState('idle'); setQrData(null); setError(toErrorState(err, 'Failed to start QR login.')); }
@@ -136,7 +133,6 @@ export default function FacultyLogin() {
   const cancelQR = () => {
     if (pollRef.current) clearInterval(pollRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
-    if (qrRefreshRef.current) clearInterval(qrRefreshRef.current);
     setKratosState('idle'); setQrData(null); setQrCountdown(0);
   };
 
@@ -207,7 +203,7 @@ export default function FacultyLogin() {
             <div style={{ textAlign: 'center' }}>
               {!qrData ? (
                 <>
-                  <p style={{ fontSize: '0.8125rem', color: '#94A3B8', marginBottom: '1rem' }}>Scan a QR code with your KratosID mobile app. The code is valid for only about 18 seconds, so scan it as soon as it appears.</p>
+                  <p style={{ fontSize: '0.8125rem', color: '#94A3B8', marginBottom: '1rem' }}>Scan a QR code with your KratosID mobile app. QR codes are short-lived, so scan it as soon as it appears.</p>
                   <button onClick={handleStartQR} style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: '#14B8A6', color: '#fff', fontWeight: '700', fontSize: '0.9rem', border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><QrCode size={16} /> Generate QR Code</button>
                 </>
               ) : (
