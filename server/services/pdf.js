@@ -63,6 +63,12 @@ class Doc {
     this.issuedAt = new Date();
     this.W = 595.28; this.H = 841.89; this.M = 50;
     this.cw = this.W - this.M * 2;
+    // Hard floor for body content. Everything below this line is reserved for the
+    // painted footer, so nothing drawn by the layout can collide with it. Crucially
+    // it also keeps the footer's own text inside the page's bottom margin — text
+    // placed past the margin makes pdfkit silently paginate, which appended a blank
+    // page below every content page.
+    this.bottom = this.H - this.M - 34;
     this.pages = 0;
     this.doc = new PDFDocument({
       size: 'A4', bufferPages: true, autoFirstPage: false,
@@ -75,7 +81,9 @@ class Doc {
   newPage() { this.doc.addPage(); return this.M + 40; }
 
   secTitle(txt, y) {
-    if (y > this.H - 120) { this.doc.addPage(); y = this.M + 40; }
+    // Never start a section inside the painted header band.
+    y = Math.max(y, this.M + 40);
+    if (y > this.bottom - 40) { this.doc.addPage(); y = this.M + 40; }
     this.doc.font(F.bold).fontSize(9).fillColor(COLORS.teal).text(txt, this.M, y, { width: this.cw, lineBreak: false });
     const b = this.doc.y + 2;
     this.doc.save().moveTo(this.M, b).lineTo(this.M + 60, b).lineWidth(1.5).strokeColor(COLORS.teal).stroke().restore();
@@ -95,7 +103,13 @@ class Doc {
     return this.doc.y + 10;
   }
 
-  gap(n) { if (this.doc.y + n > this.H - this.M - 30) { this.doc.addPage(); return this.M + 40; } return this.doc.y; }
+  // pdfkit resets its cursor to the top margin after addPage(), which is inside the
+  // header band; clamp so callers that continue from this cursor cannot draw under
+  // the header.
+  gap(n) {
+    if (this.doc.y + n > this.bottom) { this.doc.addPage(); return this.M + 40; }
+    return Math.max(this.doc.y, this.M + 40);
+  }
 
   // Paint headers/footers AFTER all content (no cascade)
   paintHeadersFooters() {
@@ -121,9 +135,10 @@ class Doc {
       this.doc.text(stamp, 0, this.H / 2 - 14, { width: this.W, align: 'center', lineBreak: false });
       this.doc.restore();
 
-      // Footer
-      const fy = this.H - this.M - 10;
-      this.doc.save().moveTo(this.M, fy - 10).lineTo(this.W - this.M, fy - 10)
+      // Footer — every line stays above this.bottom so pdfkit never paginates it
+      // (a line past the bottom margin adds a blank page to the document).
+      const fy = this.bottom + 14;
+      this.doc.save().moveTo(this.M, this.bottom + 4).lineTo(this.W - this.M, this.bottom + 4)
         .lineWidth(0.3).strokeColor(COLORS.slateMuted).stroke().restore();
       this.doc.font(F.regular).fontSize(6.5).fillColor(COLORS.slateLight)
         .text('V-POSH * VIT-AP University', this.M, fy, { width: 200, lineBreak: false });
@@ -320,13 +335,13 @@ async function generateStatusReport(complaint, user, history = [], updates = [],
 
   // ICC Procedure & Rules & Regulations
   y = d.gap(40);
-  if (y > d.H - 120) { y = d.newPage(); }
+  if (y > d.bottom - 40) { y = d.newPage(); }
   y = d.secTitle('ICC PROCEDURE & RULES & REGULATIONS', y);
   y = renderRulesBlock(d, y, complaint);
 
   // ── PAGE 2+: POSH ACT GUIDELINES ──────────────────────────────────────
   y = d.gap(40);
-  if (y > d.H - 150) { y = d.newPage(); }
+  if (y > d.bottom - 60) { y = d.newPage(); }
   y = d.secTitle('GUIDELINES UNDER THE POSH ACT, 2013', y);
 
   const guidelines = [
@@ -370,7 +385,7 @@ async function generateStatusReport(complaint, user, history = [], updates = [],
 
   for (const g of guidelines) {
     const estH = 20 + g.body.split(' ').length * 2.5;
-    if (y + estH > d.H - d.M - 30) { y = d.newPage(); }
+    if (y + estH > d.bottom) { y = d.newPage(); }
     d.doc.font(F.bold).fontSize(8).fillColor(COLORS.teal).text(g.heading, d.M, y, { width: d.cw, lineBreak: false });
     y = d.doc.y + 3;
     d.doc.font(F.regular).fontSize(7.5).fillColor(COLORS.navyLight).text(g.body, d.M, y, { width: d.cw, lineGap: 2 });
@@ -379,7 +394,7 @@ async function generateStatusReport(complaint, user, history = [], updates = [],
 
   // ── PAGE 3+: RIGHTS & REMEDIES ────────────────────────────────────────
   y = d.gap(40);
-  if (y > d.H - 150) { y = d.newPage(); }
+  if (y > d.bottom - 60) { y = d.newPage(); }
   y = d.secTitle('RIGHTS OF THE COMPLAINANT & REMEDIES', y);
 
   const rights = [
@@ -411,7 +426,7 @@ async function generateStatusReport(complaint, user, history = [], updates = [],
 
   for (const r of rights) {
     const estH = 20 + r.body.split(' ').length * 2.5;
-    if (y + estH > d.H - d.M - 30) { y = d.newPage(); }
+    if (y + estH > d.bottom) { y = d.newPage(); }
     d.doc.font(F.bold).fontSize(8).fillColor(COLORS.teal).text(r.heading, d.M, y, { width: d.cw, lineBreak: false });
     y = d.doc.y + 3;
     d.doc.font(F.regular).fontSize(7.5).fillColor(COLORS.navyLight).text(r.body, d.M, y, { width: d.cw, lineGap: 2 });
@@ -420,7 +435,7 @@ async function generateStatusReport(complaint, user, history = [], updates = [],
 
   // ── PAGE: EMPLOYER OBLIGATIONS & INSTITUTIONAL POLICY ─────────────────
   y = d.gap(40);
-  if (y > d.H - 150) { y = d.newPage(); }
+  if (y > d.bottom - 60) { y = d.newPage(); }
   y = d.secTitle('EMPLOYER OBLIGATIONS & INSTITUTIONAL POLICY', y);
 
   const obligations = [
@@ -452,7 +467,7 @@ async function generateStatusReport(complaint, user, history = [], updates = [],
 
   for (const ob of obligations) {
     const estH = 20 + ob.body.split(' ').length * 2.5;
-    if (y + estH > d.H - d.M - 30) { y = d.newPage(); }
+    if (y + estH > d.bottom) { y = d.newPage(); }
     d.doc.font(F.bold).fontSize(8).fillColor(COLORS.teal).text(ob.heading, d.M, y, { width: d.cw, lineBreak: false });
     y = d.doc.y + 3;
     d.doc.font(F.regular).fontSize(7.5).fillColor(COLORS.navyLight).text(ob.body, d.M, y, { width: d.cw, lineGap: 2 });
@@ -498,7 +513,7 @@ function addSectionToPage(d, y, needed) {
   // enough for a section of at least `needed` pts. Callers use this to
   // decide whether to start a fresh page so section headers are never
   // orphaned at the bottom of a page.
-  return y + needed <= d.H - d.M - 20;
+  return y + needed <= d.bottom;
 }
 
 function renderRulesBlock(d, y, complaint) {
@@ -564,15 +579,17 @@ function renderRulesBlock(d, y, complaint) {
 
   d.doc.font(F.regular).fontSize(fontSize);
 
-  for (const rule of rules) {
+  for (let ri = 0; ri < rules.length; ri++) {
+    const rule = rules[ri];
+    const isLast = ri === rules.length - 1;
     // Determine whether the heading itself fits on the current page.
-    if (y + ruleH + 2 > d.H - d.M - 20) {
+    if (y + ruleH + 2 > d.bottom) {
       y = d.newPage();
     }
     d.doc.font(F.bold).fontSize(ruleH).fillColor(COLORS.teal)
       .text(rule.heading.toUpperCase(), left, y, { width });
     y = d.doc.y + ruleGap;
-    if (y > d.H - d.M - 20) { y = d.newPage(); }
+    if (y > d.bottom) { y = d.newPage(); }
     d.doc.font(F.regular).fontSize(fontSize).fillColor(COLORS.navyLight);
     for (const para of rule.body) {
       // Compute lines that fit the width WITHOUT breaking words.
@@ -581,11 +598,11 @@ function renderRulesBlock(d, y, complaint) {
       const lines = wrapLines(d, para, width);
       if (lines.length === 0) continue;
       // If the block won't fit, move to next page.
-      if (y + fontSize * lines.length + (lines.length - 1) * 2.5 + 6 > d.H - d.M - 20) {
+      if (y + fontSize * lines.length + (lines.length - 1) * 2.5 + 6 > d.bottom) {
         y = d.newPage();
       }
       for (const line of lines) {
-        if (y + fontSize + 4 > d.H - d.M - 20) { y = d.newPage(); }
+        if (y + fontSize + 4 > d.bottom) { y = d.newPage(); }
         // Render each pre-wrapped line as a single line. We MUST pass
         // lineBreak: false so pdfkit does not attempt its own wrapping
         // (which breaks words with negative spacing in the TJ array).
@@ -596,11 +613,19 @@ function renderRulesBlock(d, y, complaint) {
       }
       y += ruleTextGap;
     }
-    d.doc.save().moveTo(left, y).lineTo(left + width, y)
-      .lineWidth(0.4).strokeColor(COLORS.slateMuted).stroke();
-    y += 10;
+    // Separator rule between entries: sits a few points below the last line so it
+    // never crosses the text, and the graphics state is restored (an unpaired
+    // save() leaked the page transform into later drawing, which smeared rules
+    // over text). The last entry is skipped — the following section heading draws
+    // its own underline and a second rule right above it looked like an overline.
+    if (!isLast) {
+      const ruleY = y + 4;
+      d.doc.save().moveTo(left, ruleY).lineTo(left + width, ruleY)
+        .lineWidth(0.4).strokeColor(COLORS.slateMuted).stroke().restore();
+      y = ruleY + 8;
+    }
   }
-  return d.doc.y;
+  return y;
 }
 
 function wrapLines(d, text, width) {
