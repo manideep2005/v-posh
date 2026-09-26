@@ -7,14 +7,14 @@ export default function Landing() {
     <div>
       {/* Hero Section */}
       <section className="landing-hero">
-        <div className="container split-sidebar" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 380px)', gap: '3rem', alignItems: 'center' }}>
+        <div className="container landing-hero-grid">
           <div>
             <div className="landing-badge">
-              <img src="/vit-ap-logo.png" alt="VIT-AP Logo" style={{ height: '28px', width: 'auto' }} />
+              <img src="/vit-ap-logo.png" alt="VIT-AP Logo" />
               <span>V-POSH PLATFORM</span>
             </div>
 
-            <h1 style={{ fontSize: '2.5rem', fontWeight: '700', lineHeight: '1.2', letterSpacing: '-0.02em', marginBottom: '1.25rem', fontFamily: 'var(--font-serif)' }}>
+            <h1 className="landing-hero-title">
               Your concern deserves to be heard with dignity and complete privacy.
             </h1>
             <p style={{ fontSize: '1.05rem', lineHeight: '1.6', marginBottom: '2rem', maxWidth: '640px' }}>
@@ -101,7 +101,7 @@ export default function Landing() {
 
       {/* Emergency Assistance Banner */}
       <section className="landing-emergency">
-        <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
+        <div className="container landing-emergency-row">
           <div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: '700' }}>
               Need Urgent Assistance or Immediate Counseling?
@@ -110,7 +110,7 @@ export default function Landing() {
               The VIT-AP V-POSH cell helpline is available for emergency support and guidance.
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div className="landing-emergency-actions">
             <a href="tel:+918632377777" className="btn btn-emerald" style={{ textDecoration: 'none' }}>
               <PhoneCall size={16} /> Call +91 863-2377777
             </a>

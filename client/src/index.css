@@ -1109,25 +1109,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     height: 30px !important;
   }
 
-  /* Landing hero: stack columns */
-  section > .container[style*="grid-template-columns: 1fr 380px"] {
-    grid-template-columns: 1fr !important;
-    gap: 2rem !important;
-  }
-
-  /* Dashboard: stack two-column grid */
-  div[style*="grid-template-columns: 1fr 340px"] {
-    grid-template-columns: 1fr !important;
-    gap: 1.25rem !important;
-  }
-
   /* Raise Complaint 2-col grid rows */
   div[style*="grid-template-columns: 1fr 1fr"] {
-    grid-template-columns: 1fr !important;
-  }
-
-  /* Admin complaint detail 2-col */
-  div[style*="gridTemplateColumns: '2fr 1fr'"] {
     grid-template-columns: 1fr !important;
   }
 
@@ -1158,14 +1141,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   /* Tables: horizontal scroll on small screens */
   .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-  /* Hero text size */
-  section h1[style*="2.5rem"] { font-size: 1.75rem !important; }
-
-  /* Emergency banner */
-  div[style*="justifyContent: 'space-between'"][style*="flexWrap: 'wrap'"] {
-    flex-direction: column;
-    align-items: flex-start;
-  }
 }
 
 /* ─── Responsive Breakpoint: Small Mobile ≤ 480px ───────────────────── */
@@ -2454,11 +2429,94 @@ html.dark .confidentiality-notice { background-color: var(--color-slate-100); }
 html.dark .notif-item-unread:hover { background-color: rgba(59,130,246,0.1); }
 html.dark .timeline-dot { background-color: var(--color-slate-100); }
 html.dark .timeline-item.active .timeline-dot { background-color: var(--color-slate-100); box-shadow: 0 0 0 3px rgba(255,255,255,0.1); }
+/* ── Landing page ──────────────────────────────────────────────────────── */
+
+/* The hero's two-column grid used to live in a `style={{ gridTemplateColumns }}`
+   attribute. An inline style outranks every media query, so the 380px summary
+   card stayed side-by-side on phones and pushed the hero off screen. Owning it
+   in CSS is what makes the hero actually collapse. */
+.landing-hero {
+  padding: 3rem 0 4rem;
+}
+
+.landing-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+  gap: 3rem;
+  align-items: center;
+}
+
+.landing-hero-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.25rem;
+  font-family: var(--font-serif);
+}
+
+/* Logo + wordmark as one badge: inline-flex keeps the mark and the label on a
+   single row, and the label clips with an ellipsis instead of wrapping beneath
+   the logo (which is how 'V-POSH PLATFORM' used to overlap it). */
+.landing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: 100%;
+  padding: 0.4rem 0.9rem 0.4rem 0.55rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--color-slate-200);
+  border-radius: 999px;
+  background: #FFFFFF;
+}
+
+.landing-badge img {
+  height: 28px;
+  width: auto;
+  flex-shrink: 0;
+}
+
 .landing-badge span {
   color: var(--color-navy-900);
   font-weight: 800;
   font-size: 0.875rem;
   letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.landing-emergency-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.landing-emergency-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+@media (max-width: 1024px) {
+  .landing-hero { padding: 2.25rem 0 3rem; }
+  .landing-hero-grid { grid-template-columns: minmax(0, 1fr); gap: 2rem; align-items: stretch; }
+}
+
+@media (max-width: 768px) {
+  .landing-hero { padding: 1.75rem 0 2.5rem; }
+  .landing-hero-title { font-size: 1.75rem; }
+  .landing-emergency-row { flex-direction: column; align-items: flex-start; }
+}
+
+@media (max-width: 480px) {
+  .landing-hero { padding: 1.5rem 0 2.25rem; }
+  .landing-hero-title { font-size: 1.5rem; }
+  .landing-badge { gap: 0.45rem; padding: 0.35rem 0.7rem 0.35rem 0.45rem; }
+  .landing-badge span { font-size: 0.75rem; }
 }
 
 .landing-card {
