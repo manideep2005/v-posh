@@ -93,9 +93,26 @@ export default function FacultyProfile() {
             <label>Designation</label>
             <input type="text" className="form-control" value={form.designation} onChange={e => setForm({ ...form, designation: e.target.value })} />
           </div>
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" className="form-control" value={user?.email || ''} disabled style={{ background: 'var(--color-slate-100)' }} />
+          <div className="grid-2" style={{ gap: '1rem' }}>
+            <div className="form-group">
+              <label>V-POSH ID</label>
+              <input
+                type="text"
+                className="form-control"
+                value={user?.poshId || '—'}
+                disabled
+                readOnly
+                aria-describedby="posh-id-hint"
+                style={{ background: 'var(--color-slate-100)', fontFamily: 'monospace', letterSpacing: '0.02em' }}
+              />
+              <p id="posh-id-hint" style={{ fontSize: '0.6875rem', color: 'var(--color-slate-500)', marginTop: '0.3rem' }}>
+                Permanent reference issued with your account — it cannot be changed.
+              </p>
+            </div>
+            <div className="form-group">
+              <label>Email</label>
+              <input type="email" className="form-control" value={user?.email || ''} disabled readOnly style={{ background: 'var(--color-slate-100)' }} />
+            </div>
           </div>
           <div className="form-group">
             <label>Department</label>

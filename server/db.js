@@ -316,6 +316,7 @@ const mongoEngine = {
       // Create indexes for frequently queried fields
       await this.col('users').createIndex({ email: 1 }, { unique: true });
       await this.col('users').createIndex({ studentId: 1 });
+      await this.col('users').createIndex({ poshId: 1 });
       await this.col('complaints').createIndex({ referenceId: 1 }, { unique: true });
       await this.col('complaints').createIndex({ userId: 1 });
       await this.col('complaints').createIndex({ status: 1 });
@@ -478,6 +479,35 @@ for (const key of Object.keys(MONGO_COLLECTIONS)) {
     async count(query) { return engine().count(MONGO_COLLECTIONS[key], query); }
   };
 }
+
+// Every account gets a stable, human-readable V-POSH ID. Hooking insertOne here
+// (rather than at each of the eight signup / SSO / admin-created call sites)
+// means no account can ever be created without one.
+const { derivePoshId, resolveUniquePoshId } = require('./services/poshId');
+
+async function poshIdTaken(candidate, exceptId) {
+  const clash = await dbExports.users.findOne({ poshId: candidate });
+  return Boolean(clash && clash.id !== exceptId);
+}
+
+const usersInsertOne = dbExports.users.insertOne;
+dbExports.users.insertOne = async function (doc) {
+  if (doc && !doc.poshId) {
+    const base = derivePoshId(doc);
+    doc = { ...doc, poshId: await resolveUniquePoshId(base, c => poshIdTaken(c)) };
+  }
+  return usersInsertOne.call(dbExports.users, doc);
+};
+
+// Self-healing read path: accounts created before V-POSH IDs existed pick one up
+// the first time they are loaded, so a missing id never reaches the UI.
+dbExports.users.ensurePoshId = async function (user) {
+  if (!user || user.poshId) return user;
+  const base = derivePoshId(user);
+  const poshId = await resolveUniquePoshId(base, c => poshIdTaken(c, user.id));
+  await dbExports.users.updateOne(user.id, { poshId });
+  return { ...user, poshId };
+};
 
 // Reference-ID helper lives on complaints directly
 dbExports.complaints.nextReferenceId = async function (prefix) {

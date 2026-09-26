@@ -131,6 +131,7 @@ export default function StudentProfile() {
               <div className="cell-muted truncate" style={{ maxWidth: '100%' }}>{user?.email}</div>
               <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
                 <span className="chip chip-emerald">Verified student</span>
+                {user?.poshId && <span className="chip chip-navy">V-POSH {user.poshId}</span>}
                 {user?.studentId && <span className="chip chip-navy">ID {user.studentId}</span>}
               </div>
             </div>
@@ -154,6 +155,25 @@ export default function StudentProfile() {
                   <Lock size={13} />
                 </div>
               </div>
+            </div>
+
+            <div className="form-group" style={{ marginTop: '1rem' }}>
+              <label htmlFor="poshId">V-POSH ID</label>
+              <div className="input-locked">
+                <Fingerprint size={15} />
+                <input
+                  id="poshId"
+                  className="form-control"
+                  value={user?.poshId || '—'}
+                  disabled
+                  readOnly
+                  style={{ fontFamily: 'monospace', letterSpacing: '0.02em' }}
+                />
+                <Lock size={13} />
+              </div>
+              <p style={{ fontSize: '0.6875rem', color: 'var(--color-slate-500)', marginTop: '0.3rem' }}>
+                Permanent reference issued with your account. Quote it in any correspondence — it cannot be changed.
+              </p>
             </div>
 
             <div className="form-group" style={{ marginTop: '1rem' }}>

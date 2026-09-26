@@ -35,8 +35,11 @@ async function verifyAndAttach(token) {
     throw Object.assign(new Error('Account disabled. Contact administration.'), { status: 403 });
   }
 
+  // Accounts predating V-POSH IDs pick one up here; a no-op once it is set.
+  const withPoshId = await db.users.ensurePoshId(user);
+
   // Attach user to request without sensitive credentials
-  const { password, resetTokenHash, resetTokenExpiresAt, ...safeUser } = user;
+  const { password, resetTokenHash, resetTokenExpiresAt, ...safeUser } = withPoshId;
   return { user: safeUser };
 }
 

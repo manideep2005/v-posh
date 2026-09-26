@@ -178,12 +178,27 @@ export default function StudentSettings() {
             {/* Read-only fields */}
             <div className="grid-2" style={{ gap: '1rem', marginTop: '0.5rem' }}>
               <div className="form-group">
+                <label>V-POSH ID</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={user?.poshId || '—'}
+                  disabled
+                  readOnly
+                  aria-describedby="posh-id-hint"
+                  style={{ background: 'var(--color-slate-100)', fontFamily: 'monospace', letterSpacing: '0.02em' }}
+                />
+                <p id="posh-id-hint" style={{ fontSize: '0.6875rem', color: 'var(--color-slate-500)', marginTop: '0.3rem' }}>
+                  Your permanent V-POSH reference. Quote it in any correspondence — it cannot be changed.
+                </p>
+              </div>
+              <div className="form-group">
                 <label>Student ID / Roll No</label>
-                <input type="text" className="form-control" value={user?.studentId || ''} disabled style={{ background: 'var(--color-slate-100)' }} />
+                <input type="text" className="form-control" value={user?.studentId || ''} disabled readOnly style={{ background: 'var(--color-slate-100)' }} />
               </div>
               <div className="form-group">
                 <label>Account Status</label>
-                <input type="text" className="form-control" value={user?.status || ''} disabled style={{ background: 'var(--color-slate-100)' }} />
+                <input type="text" className="form-control" value={user?.status || ''} disabled readOnly style={{ background: 'var(--color-slate-100)' }} />
               </div>
             </div>
 
