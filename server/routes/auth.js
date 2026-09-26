@@ -10,6 +10,7 @@ const { authenticateToken } = require('../middleware/auth');
 const { logAuditAction } = require('../middleware/audit');
 const { rateLimit } = require('../middleware/rateLimit');
 const { sendService, isConfigured: isEmailConfigured } = require('../services/email');
+const { shapeQrPayload, payloadType } = require('../services/qrPayload');
 
 // Brute-force protection: 10 attempts per 15 minutes per IP per endpoint
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
@@ -973,7 +974,20 @@ router.post('/kratosid/qr/start', qrStartLimiter, requireKratosConfig, async (re
   try {
     const kratos = getKratosClient();
     const qrData = await kratos.startQrLogin();
-    res.json({ success: true, ...qrData });
+
+    // Render Kratos's payload verbatim unless a variant/type was explicitly
+    // requested (see services/qrPayload.js). Logged so a rejected scan can be
+    // matched against the exact string that was on screen.
+    const variant = String((req.body && req.body.variant) || config.KRATOSID_QR_VARIANT || 'asis');
+    const qrPayload = shapeQrPayload(qrData.qrPayload, {
+      variant,
+      token: qrData.token,
+      baseUrl: config.KRATOSID_BASE_URL,
+      type: config.KRATOSID_QR_TYPE,
+    });
+    console.log(`[KratosID] QR started token=${qrData.token} variant=${variant} types=${payloadType(qrData.qrPayload)}->${payloadType(qrPayload)} expiresIn=${qrData.expiresIn}`);
+
+    res.json({ success: true, ...qrData, qrPayload, qrVariant: variant });
   } catch (err) {
     console.error('QR start error:', err);
     if (err.code === KratosIDError.NO_PRODUCT_ACCESS) {
@@ -1000,6 +1014,11 @@ router.post('/kratosid/qr/poll', pollLimiter, requireKratosConfig, async (req, r
     let sawPending = false;
     let sawDenied = false;
     let lastError = null;
+    // The newest raw status KratosID reported for any of our tokens. Surfaced to
+    // the UI because it is the only way to tell whether the mobile app ever
+    // touched the code: an app that rejects the payload leaves it at "pending"
+    // forever, whereas a scan it accepts moves it through claiming/claimed.
+    let kratosStatus = 'pending';
 
     for (const tk of [...issued].reverse()) {
       const resp = await kratos._get('/auth/qr/status', { token: tk });
@@ -1015,10 +1034,11 @@ router.post('/kratosid/qr/poll', pollLimiter, requireKratosConfig, async (req, r
       try { data = await resp.json(); } catch (_) { continue; }
       const status = data.status;
 
-      if (status === 'approved') { approvedData = data; break; }
-      if (status === 'denied') { sawDenied = true; continue; }
+      if (status === 'approved') { kratosStatus = 'approved'; approvedData = data; break; }
+      if (status === 'denied') { sawDenied = true; kratosStatus = 'denied'; continue; }
       if (status === 'expired') continue;   // this code lapsed — an older one may hold the approval
       sawPending = true;                   // pending / claiming / claimed
+      if (typeof status === 'string' && status !== 'pending') kratosStatus = status;
     }
 
     if (!approvedData) {
@@ -1026,14 +1046,14 @@ router.post('/kratosid/qr/poll', pollLimiter, requireKratosConfig, async (req, r
         return res.status(401).json({ success: false, code: 'denied_by_user', message: 'QR login denied by user.' });
       }
       if (sawPending) {
-        return res.json({ success: false, approved: false, status: 'pending' });
+        return res.json({ success: false, approved: false, status: 'pending', kratosStatus });
       }
       if (lastError) {
         console.error('QR status check failed:', lastError);
         return res.status(500).json({ success: false, message: 'QR status check failed.' });
       }
       // Every code this session checked has lapsed server-side.
-      return res.json({ success: false, approved: false, status: 'expired', message: 'This QR code expired. Generate a new one and scan it straight away.' });
+      return res.json({ success: false, approved: false, status: 'expired', kratosStatus: 'expired', message: 'This QR code expired. Generate a new one and scan it straight away.' });
     }
 
     const data = approvedData;

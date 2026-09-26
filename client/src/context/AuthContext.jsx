@@ -74,21 +74,40 @@ export function AuthProvider({ children }) {
   // Keep old name for backward compat
   const kratosLogin = startPushLogin;
 
-  // KratosID QR Login — starts QR session, then polls for approval
+  // KratosID QR Login — starts QR session, then polls for approval.
+  //
+  // ?qrVariant=<asis|compact|rebrand|token|url> on the login URL changes how the
+  // payload is rendered, so a scan the mobile app rejects can be narrowed down
+  // without a deploy. Absent (the normal case) the payload is passed through
+  // exactly as KratosID delivered it.
   const startQrLogin = async () => {
-    const res = await apiFetch('/auth/kratosid/qr/start', { method: 'POST', body: '{}' });
-    return res; // { token, qrPayload, expiresAt, expiresIn }
+    let variant;
+    try {
+      variant = new URLSearchParams(window.location.search).get('qrVariant') || undefined;
+    } catch (_) { /* non-browser context */ }
+    const res = await apiFetch('/auth/kratosid/qr/start', {
+      method: 'POST',
+      body: JSON.stringify(variant ? { variant } : {})
+    });
+    return res; // { token, qrPayload, expiresAt, expiresIn, qrVariant }
   };
 
   // Accepts one code, or the list of codes issued during this attempt. KratosID
   // controls the QR session lifetime server-side (returned as expiresIn), so the
   // server approves on whichever code the user actually scanned.
-  const pollQrLogin = async (qrTokens) => {
+  //
+  // `onStatus` receives KratosID's raw status for the code (pending / claiming /
+  // claimed / denied / expired). It is the only signal that tells an app which
+  // parsed the code from an app which refused it: a refusal stays "pending".
+  const pollQrLogin = async (qrTokens, { onStatus } = {}) => {
     const tokens = Array.isArray(qrTokens) ? qrTokens : [qrTokens];
     const res = await apiFetch('/auth/kratosid/qr/poll', {
       method: 'POST',
       body: JSON.stringify({ tokens })
     });
+    if (typeof onStatus === 'function' && res && res.kratosStatus) {
+      try { onStatus(res.kratosStatus); } catch (_) { /* diagnostics only */ }
+    }
     if (res.success && res.token) {
       localStorage.setItem('vposh_token', res.token);
       setUser(res.user);

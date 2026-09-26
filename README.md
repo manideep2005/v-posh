@@ -166,6 +166,8 @@ persistent disk is required.
    | `KRATOSID_PRODUCT_ID` | KratosID product ID |
    | `KRATOSID_BASE_URL` | `https://api-prod.kratosid.com` — **set this explicitly**; the old `api.kratosid.com` host does not resolve |
    | `KRATOSID_APP_NAME` | label shown on the mobile approval prompt (e.g. `vposh`) |
+   | `KRATOSID_QR_VARIANT` | optional QR payload rendering: `asis` (default, verbatim), `compact`, `rebrand`, `token`, `url` — see below |
+   | `KRATOSID_QR_TYPE` | optional override of the JSON payload `type` (e.g. `kratosid.qr_login`) |
    | `GOOGLE_CLIENT_ID` | same value as `VITE_GOOGLE_CLIENT_ID`; the server verifies Google sign-ins with it |
    | `VITE_GOOGLE_CLIENT_ID` | Google OAuth client ID, baked into the client build |
 
@@ -195,6 +197,36 @@ Notes:
 - For a long-running host instead (Render/Railway/VPS), use
   `npm start` (`node server/index.js`), which serves both the API and the
   built client from one process.
+
+### KratosID QR sign-in
+
+All four login pages render the code through one component
+(`client/src/components/KratosQrPanel.jsx`). Three rules matter there:
+
+- **One code per session, never rotated.** KratosID decides the session
+  lifetime server-side (currently 50s; it is not a request parameter) and a
+  second `/auth/qr/start` invalidates the first code. Rotating the displayed
+  code while the user is scanning it is what makes the mobile app report
+  "expired", so the panel derives its countdown from the `expiresAt` KratosID
+  returned and offers a fresh code once that lapses.
+- **Always black on a plain white card with a real quiet zone.** `qrcode.react`
+  paints its background over the symbols only and defaults to `marginSize: 0`,
+  so a themed dark surround used to sit flush against the modules — no quiet
+  zone, and a scanner that cannot find the finder patterns reports "invalid".
+  The card is now fixed to `#FFFFFF` regardless of theme and `marginSize={4}`
+  adds the spec's four-module quiet zone inside the symbol.
+- **A refused scan is visible.** The panel shows KratosID's raw status for the
+  code (`pending` → `claimed`). `pending` forever means the app never parsed the
+  payload; `claimed` means it did. The exact rendered string is under
+  *Diagnostics* in the panel.
+
+If the app rejects a code, the payload rendering can be varied without a
+redeploy — either `KRATOSID_QR_VARIANT` (`asis`, `compact`, `rebrand`, `token`,
+`url`) or per-session via the login URL, e.g.
+`/auth/student/login?qrVariant=rebrand`. `rebrand` renames the JSON `type` from
+Kratos's legacy `quantanex.qr_login` to `kratosid.qr_login`; `token` sends the
+bare token, which is what the KratosID dashboard itself encodes for device
+pairing.
 
 ## Project structure
 

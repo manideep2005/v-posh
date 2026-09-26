@@ -64,6 +64,11 @@ module.exports = {
   // dead hostname on Vercel, where .env is not deployed).
   KRATOSID_BASE_URL: resolveKratosBaseUrl(),
   KRATOSID_APP_NAME: cleanEnv(process.env.KRATOSID_APP_NAME) || 'KratosID',
+  // QR payload shaping. Empty values keep KratosID's payload exactly as
+  // delivered (what the vendor SDK documents). See server/services/qrPayload.js
+  // for why the variants exist and how to use them to diagnose a rejected scan.
+  KRATOSID_QR_VARIANT: cleanEnv(process.env.KRATOSID_QR_VARIANT) || '',
+  KRATOSID_QR_TYPE: cleanEnv(process.env.KRATOSID_QR_TYPE) || '',
 
   // Shared secret for scheduled maintenance jobs (escalation sweep, ledger
   // checks). On Vercel set the same value as CRON_SECRET so Cron can call it.

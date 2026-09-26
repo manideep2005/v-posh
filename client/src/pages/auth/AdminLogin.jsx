@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useGoogleLogin } from '@react-oauth/google';
 import { ShieldCheck, AlertCircle, Smartphone, QrCode, Mail} from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 import RateLimitAlert, { useRateLimited, toErrorState } from '../../components/RateLimitAlert';
+import KratosQrPanel from '../../components/KratosQrPanel';
 
 function GoogleIcon() {
   return (
@@ -23,19 +23,18 @@ export default function AdminLogin() {
   const [authTab, setAuthTab] = useState('push'); // push | qr
   const [kratosEmail, setKratosEmail] = useState('');
   const [kratosState, setKratosState] = useState('idle');
-  const [qrData, setQrData] = useState(null);
-  const [qrCountdown, setQrCountdown] = useState(0);
+  const [qrBusy, setQrBusy] = useState(false);
   const [pushCountdown, setPushCountdown] = useState(0);
   const pollRef = useRef(null);
-  const countdownRef = useRef(null);
   const rateLimited = useRateLimited(error);
-  const { kratosLogin, startPushLogin, pollPushLogin, startQrLogin, pollQrLogin, login } = useAuth();
+  const { kratosLogin, startPushLogin, pollPushLogin, login } = useAuth();
   const navigate = useNavigate();
+  // A scan in flight owns the screen, so it blocks the other sign-in routes.
+  const busy = kratosState === 'waiting' || qrBusy;
 
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, []);
 
@@ -83,74 +82,6 @@ export default function AdminLogin() {
         }
       }, 2000);
     } catch (err) { setKratosState('idle'); setPushCountdown(0); setError(toErrorState(err, 'Failed to send push notification.')); }
-  };
-
-  const handleStartQR = async () => {
-    setError('');
-    setKratosState('waiting');
-    try {
-      const res = await startQrLogin();
-      setQrData(res);
-      // One fixed code, simply polled — never rotated. KratosID controls how long
-      // a QR code lives server-side (it is not a request parameter), so we always
-      // show the code's real remaining life from the response and offer a fresh
-      // one when it lapses. Swapping the code out from under a scan is what made
-      // the KratosID app report "expired".
-      const expiresAtMs = res.expiresAt ? res.expiresAt * 1000 : Date.now() + (res.expiresIn || 60) * 1000;
-      setQrCountdown(Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)));
-
-      countdownRef.current = setInterval(() => {
-        const remaining = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000));
-        setQrCountdown(remaining);
-        if (remaining <= 0) {
-          clearInterval(countdownRef.current);
-          clearInterval(pollRef.current);
-          setKratosState('idle');
-          setQrData(null);
-          setError('That QR code expired before it was scanned. Generate a new one and scan it straight away.');
-        }
-      }, 1000);
-
-      // Poll the displayed code until it is approved or lapses.
-      pollRef.current = setInterval(async () => {
-        try {
-          const user = await pollQrLogin(res.token);
-          if (!user) return; // not scanned yet — keep polling
-          clearInterval(pollRef.current);
-          clearInterval(countdownRef.current);
-          redirectByRole(user);
-        } catch (err) {
-          if (err && err.isRateLimit) {
-            clearInterval(pollRef.current);
-            clearInterval(countdownRef.current);
-            setKratosState('idle');
-            setQrData(null);
-            setError(err);
-            return;
-          }
-          if (err.message && (err.message.includes('denied'))) {
-            clearInterval(pollRef.current);
-            clearInterval(countdownRef.current);
-            setKratosState('idle');
-            setQrData(null);
-            setError(err.message);
-          }
-          // Still pending — keep polling until the code is approved or lapses
-        }
-      }, 3000);
-    } catch (err) {
-      setKratosState('idle');
-      setQrData(null);
-      setError(toErrorState(err, 'Failed to start QR login.'));
-    }
-  };
-
-  const cancelQR = () => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    setKratosState('idle');
-    setQrData(null);
-    setQrCountdown(0);
   };
 
   const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -217,7 +148,7 @@ export default function AdminLogin() {
           {/* Tabs */}
           <div style={{ display: 'flex', gap: '4px', marginBottom: '1rem', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px' }}>
             <button
-              onClick={() => { setAuthTab('push'); cancelQR(); setError(''); }}
+              onClick={() => { setAuthTab('push'); setError(''); }}
               style={{
                 flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer',
                 fontSize: '0.8125rem', fontWeight: '600', fontFamily: 'inherit',
@@ -229,7 +160,7 @@ export default function AdminLogin() {
               <Mail size={14} /> Push
             </button>
             <button
-              onClick={() => { setAuthTab('qr'); setKratosState('idle'); setError(''); }}
+              onClick={() => { setAuthTab('qr'); setError(''); }}
               style={{
                 flex: 1, padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer',
                 fontSize: '0.8125rem', fontWeight: '600', fontFamily: 'inherit',
@@ -276,48 +207,11 @@ export default function AdminLogin() {
 
           {/* QR Tab */}
           {authTab === 'qr' && (
-            <div style={{ textAlign: 'center' }}>
-              {!qrData ? (
-                <>
-                  <p style={{ fontSize: '0.8125rem', color: '#94A3B8', marginBottom: '1rem' }}>
-                    Scan a QR code with your KratosID mobile app. QR codes are short-lived, so scan it as soon as it appears.
-                  </p>
-                  <button
-                    onClick={handleStartQR}
-                    style={{
-                      width: '100%', padding: '0.65rem', borderRadius: '6px',
-                      background: '#14B8A6', color: '#fff', fontWeight: '700', fontSize: '0.9rem',
-                      border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem'
-                    }}
-                  >
-                    <QrCode size={16} /> Generate QR Code
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div style={{ background: 'var(--color-slate-50)', borderRadius: '12px', padding: '1.25rem', display: 'inline-block', marginBottom: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
-                    <QRCodeSVG value={qrData.qrPayload} size={180} level="M" />
-                  </div>
-                  <div style={{ fontSize: '0.8125rem', color: '#93C5FD', marginBottom: '0.5rem' }}>
-                    Scan with your <strong style={{ color: '#fff' }}>KratosID app</strong>
-                  </div>
-                  <div style={{ fontSize: '0.875rem', fontWeight: '700', color: qrCountdown < 15 ? '#FCA5A5' : '#5EEAD4', marginBottom: '0.75rem', fontFamily: 'monospace' }}>
-                    {formatTime(qrCountdown)}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
-                    <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '0.9rem' }}>⏳</span>
-                    <span style={{ fontSize: '0.8125rem', color: '#94A3B8' }}>Waiting for scan…</span>
-                  </div>
-                  <button
-                    onClick={cancelQR}
-                    style={{ marginTop: '0.75rem', padding: '0.4rem 1rem', borderRadius: '4px', background: 'rgba(255,255,255,0.1)', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.15)', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    Cancel
-                  </button>
-                </>
-              )}
-            </div>
+            <KratosQrPanel
+              onApproved={redirectByRole}
+              onUsePush={() => setAuthTab('push')}
+              onBusyChange={setQrBusy}
+            />
           )}
 
           {/* Password Tab */}
@@ -334,14 +228,14 @@ export default function AdminLogin() {
         <button
           type="button"
           onClick={() => { setError(''); handleGoogleLogin(); }}
-          disabled={googleLoading || rateLimited || kratosState === 'waiting'}
+          disabled={googleLoading || rateLimited || busy}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: '0.65rem', padding: '0.72rem 1rem',
             backgroundColor: '#FFFFFF', border: '1.5px solid #E2E8F0',
             borderRadius: '6px', fontSize: '0.9375rem', fontWeight: '600', color: '#1E293B',
-            cursor: (googleLoading || kratosState === 'waiting') ? 'not-allowed' : 'pointer',
-            opacity: (googleLoading || kratosState === 'waiting') ? 0.6 : 1,
+            cursor: (googleLoading || busy) ? 'not-allowed' : 'pointer',
+            opacity: (googleLoading || busy) ? 0.6 : 1,
             transition: 'border-color 0.15s, box-shadow 0.15s',
             boxShadow: '0 1px 3px rgba(0,0,0,0.06)', fontFamily: 'inherit',
           }}
